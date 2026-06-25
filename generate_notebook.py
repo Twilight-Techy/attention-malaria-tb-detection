@@ -124,12 +124,23 @@ nb.cells = [
     gradcam_cell_md, gradcam_cell_code
 ]
 
-eval_cell_md = nbf.v4.new_markdown_cell("## 6. Comprehensive Evaluation & McNemar's Test\nCalculate Specificity, F1, MAE, RMSE, and statistically compare two models.")
-eval_cell_code = nbf.v4.new_code_cell("""# Get true labels and predictions for validation set
+eval_cell_md = nbf.v4.new_markdown_cell("## 6. Comprehensive Evaluation & McNemar's Test\nLoad the best saved weights, calculate metrics, and statistically compare two models.")
+eval_cell_code = nbf.v4.new_code_cell("""# Load the BEST weights that were saved by ModelCheckpoint during training
+# model.load_weights(save_path)
+
+# Get true labels and predictions for validation set
 # y_true = malaria_val.classes
 # y_pred_probs_m1 = model.predict(malaria_val)
 
 # evaluate_comprehensive_metrics(y_true, y_pred_probs_m1)
+
+# ---
+# If you are returning to this notebook later and want to load a completely saved model from disk:
+# import tensorflow as tf
+# from attention import cbam_block, channel_attention, spatial_attention
+# custom_objects = {'cbam_block': cbam_block, 'channel_attention': channel_attention, 'spatial_attention': spatial_attention}
+# loaded_model = tf.keras.models.load_model(save_path, custom_objects=custom_objects)
+# ---
 
 # If you have a second model (e.g. VGG16) to compare:
 # y_pred_probs_m2 = model_vgg.predict(malaria_val)
