@@ -1,6 +1,36 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import os
+import cv2
+import numpy as np
+
+def advanced_preprocessing(img):
+    """
+    Applies Histogram Equalization (CLAHE) and Noise Reduction (Gaussian Blur) 
+    as specified in the project report.
+    """
+    # Ensure image is in uint8 format for OpenCV processing
+    if img.dtype != np.uint8:
+        img_uint8 = np.clip(img, 0, 255).astype(np.uint8)
+    else:
+        img_uint8 = img
+
+    # Convert to LAB color space to apply CLAHE to the L channel
+    lab = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2LAB)
+    l_channel, a, b = cv2.split(lab)
+    
+    # Apply CLAHE
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    cl = clahe.apply(l_channel)
+    
+    # Merge and convert back to RGB
+    merged = cv2.merge((cl, a, b))
+    enhanced_img = cv2.cvtColor(merged, cv2.COLOR_LAB2RGB)
+    
+    # Apply Noise Reduction (Gaussian Blur)
+    denoised_img = cv2.GaussianBlur(enhanced_img, (3, 3), 0)
+    
+    return denoised_img.astype(np.float32)
 
 def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     """
@@ -20,6 +50,7 @@ def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     # Rotation (+/- 15), Horizontal Flip, Scaling (Zoom 0.9-1.1), Brightness
     train_datagen = ImageDataGenerator(
         rescale=1./255, # Normalization
+        preprocessing_function=advanced_preprocessing,
         rotation_range=15,
         horizontal_flip=True,
         zoom_range=[0.9, 1.1],
@@ -32,6 +63,7 @@ def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     # For validation/test, only rescale (normalize)
     test_datagen = ImageDataGenerator(
         rescale=1./255,
+        preprocessing_function=advanced_preprocessing,
         validation_split=0.3
     )
 

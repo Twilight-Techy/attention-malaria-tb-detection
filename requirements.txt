@@ -10,3 +10,4 @@ kaggle
 jupyter
 nbformat
 tqdm
+statsmodels

@@ -2,6 +2,60 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import cv2
+from sklearn.metrics import confusion_matrix, f1_score, mean_absolute_error, mean_squared_error
+from statsmodels.stats.contingency_tables import mcnemar
+
+def evaluate_comprehensive_metrics(y_true, y_pred_probs, threshold=0.5):
+    """
+    Calculates Accuracy, Precision, Recall, Specificity, F1-Score, MAE, and RMSE.
+    """
+    y_pred = (y_pred_probs >= threshold).astype(int)
+    
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    f1 = f1_score(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred_probs)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred_probs))
+    
+    print("--- Comprehensive Evaluation Metrics ---")
+    print(f"Specificity: {specificity:.4f}")
+    print(f"F1-Score:    {f1:.4f}")
+    print(f"MAE:         {mae:.4f}")
+    print(f"RMSE:        {rmse:.4f}")
+    
+    return {'specificity': specificity, 'f1': f1, 'mae': mae, 'rmse': rmse}
+
+def perform_mcnemar_test(y_true, y_pred_model1, y_pred_model2, threshold=0.5):
+    """
+    Performs McNemar's statistical test to compare two models' predictions.
+    Null hypothesis: the two models have the same error rate.
+    """
+    pred1 = (y_pred_model1 >= threshold).astype(int)
+    pred2 = (y_pred_model2 >= threshold).astype(int)
+    
+    # Create contingency table
+    both_correct = np.sum((pred1 == y_true) & (pred2 == y_true))
+    m1_correct_m2_wrong = np.sum((pred1 == y_true) & (pred2 != y_true))
+    m1_wrong_m2_correct = np.sum((pred1 != y_true) & (pred2 == y_true))
+    both_wrong = np.sum((pred1 != y_true) & (pred2 != y_true))
+    
+    table = [[both_correct, m1_correct_m2_wrong],
+             [m1_wrong_m2_correct, both_wrong]]
+             
+    # Perform the test
+    result = mcnemar(table, exact=False, correction=True)
+    
+    print("--- McNemar's Test ---")
+    print(f"Statistic: {result.statistic:.4f}")
+    print(f"p-value:   {result.pvalue:.4e}")
+    
+    if result.pvalue < 0.05:
+        print("Result: Significant difference between the two models (Reject Null Hypothesis)")
+    else:
+        print("Result: No significant difference between the two models (Fail to Reject Null Hypothesis)")
+        
+    return result
 
 def plot_training_history(history, model_name="Model"):
     """

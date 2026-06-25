@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath('src'))
 from data_loader import load_malaria_data, load_tb_data
 from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
 from train import compile_model, train_model, unfreeze_and_finetune
-from utils import plot_training_history, make_gradcam_heatmap, display_gradcam
+from utils import plot_training_history, make_gradcam_heatmap, display_gradcam, evaluate_comprehensive_metrics, perform_mcnemar_test
 """)
 
 data_cell_md = nbf.v4.new_markdown_cell("## 1. Load Datasets\nEnsure you have run `python src/download_data.py` to acquire the data.")
@@ -96,6 +96,20 @@ nb.cells = [
     finetune_cell_md, finetune_cell_code,
     gradcam_cell_md, gradcam_cell_code
 ]
+
+eval_cell_md = nbf.v4.new_markdown_cell("## 6. Comprehensive Evaluation & McNemar's Test\nCalculate Specificity, F1, MAE, RMSE, and statistically compare two models.")
+eval_cell_code = nbf.v4.new_code_cell("""# Get true labels and predictions for validation set
+# y_true = malaria_val.classes
+# y_pred_probs_m1 = model.predict(malaria_val)
+
+# evaluate_comprehensive_metrics(y_true, y_pred_probs_m1)
+
+# If you have a second model (e.g. VGG16) to compare:
+# y_pred_probs_m2 = model_vgg.predict(malaria_val)
+# perform_mcnemar_test(y_true, y_pred_probs_m1, y_pred_probs_m2)
+""")
+
+nb.cells.extend([eval_cell_md, eval_cell_code])
 
 with open('c:/MyProjects/ml/main.ipynb', 'w') as f:
     nbf.write(nb, f)
