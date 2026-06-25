@@ -66,17 +66,24 @@ model.summary()
 """)
 
 train_cell_md = nbf.v4.new_markdown_cell("## 3. Train Model\nTraining the top layers while the base convolutional layers are frozen.")
-train_cell_code = nbf.v4.new_code_cell("""# Train the model
-# Change malaria_train to tb_train if training for Tuberculosis
+train_cell_code = nbf.v4.new_code_cell("""# Define which dataset we are training on for the save file
+dataset_name = "malaria" # CHANGE THIS TO "tb" IF TRAINING ON TUBERCULOSIS
+
+# Generate a dynamic save path so models don't overwrite each other
+save_path = f"best_{dataset_name}_{model.name}.h5"
+print(f"Model will be saved to: {save_path}")
+
+# Train the model
+# Ensure you change train_data and val_data to tb_train and tb_val if training for Tuberculosis
 history = train_model(
     model, 
     train_data=malaria_train, 
     val_data=malaria_val, 
     epochs=15, 
-    model_path='best_malaria_mobilenet_attention.h5'
+    model_path=save_path
 )
 
-plot_training_history(history, model_name=model.name)
+plot_training_history(history, model_name=f"{model.name} ({dataset_name})")
 """)
 
 finetune_cell_md = nbf.v4.new_markdown_cell("## 4. Fine-Tuning\nUnfreeze the top layers and fine-tune with a lower learning rate.")
