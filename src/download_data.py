@@ -3,17 +3,17 @@ import subprocess
 from pathlib import Path
 
 def setup_kaggle_credentials():
-    """
-    Instructions for user:
-    1. Go to kaggle.com -> Account -> Create New API Token (downloads kaggle.json)
-    2. Upload kaggle.json to the environment (e.g., Colab or local)
-    3. Ensure it is placed in ~/.kaggle/kaggle.json and chmod 600
-    """
-    print("Ensure you have set up your Kaggle API credentials.")
-    print("If on Colab, upload kaggle.json and run: !mkdir ~/.kaggle && cp kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json")
+    # Kaggle API will automatically use KAGGLE_USERNAME and KAGGLE_KEY environment variables if set.
+    # Otherwise, it looks for ~/.kaggle/kaggle.json
+    pass
 
-def download_dataset(dataset_name, download_path):
-    print(f"Downloading {dataset_name}...")
+def download_dataset(dataset_name, download_path, check_folder):
+    print(f"Checking {dataset_name}...")
+    if os.path.exists(os.path.join(download_path, check_folder)):
+        print(f"-> {dataset_name} already exists at {download_path}/{check_folder}. Skipping download.")
+        return
+
+    print(f"-> Downloading {dataset_name}...")
     try:
         subprocess.run(
             ["kaggle", "datasets", "download", "-d", dataset_name, "-p", download_path, "--unzip"],
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     tb_path = data_dir / "tuberculosis"
     tb_path.mkdir(exist_ok=True)
     
-    download_dataset(malaria_dataset, str(malaria_path))
-    download_dataset(tb_dataset, str(tb_path))
+    download_dataset(malaria_dataset, str(malaria_path), "cell_images")
+    download_dataset(tb_dataset, str(tb_path), "TB_Chest_Radiography_Database")
     
     print("\nData acquisition phase complete!")

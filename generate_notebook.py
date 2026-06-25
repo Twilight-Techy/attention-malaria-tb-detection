@@ -11,19 +11,39 @@ This notebook orchestrates the training, evaluation, and interpretability of 5 d
 setup_cell = nbf.v4.new_code_cell("""import sys
 import os
 import matplotlib.pyplot as plt
+import getpass
 
-# Add src to path
+# 1. Install Dependencies
+print("Installing dependencies...")
+!pip install -q -r requirements.txt
+
+# 2. Setup Kaggle Credentials for Dataset Download
+kaggle_json_path = os.path.expanduser('~/.kaggle/kaggle.json')
+if not os.path.exists(kaggle_json_path):
+    print("Kaggle credentials not found.")
+    if 'KAGGLE_USERNAME' not in os.environ or 'KAGGLE_KEY' not in os.environ:
+        print("Please provide your Kaggle API credentials to download the datasets (from kaggle.com -> Account -> Create New API Token).")
+        os.environ['KAGGLE_USERNAME'] = input("Kaggle Username: ")
+        os.environ['KAGGLE_KEY'] = getpass.getpass("Kaggle Key: ")
+
+# 3. Add src to path
 sys.path.append(os.path.abspath('src'))
 
-from data_loader import load_malaria_data, load_tb_data
-from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
-from train import compile_model, train_model, unfreeze_and_finetune
-from utils import plot_training_history, make_gradcam_heatmap, display_gradcam, evaluate_comprehensive_metrics, perform_mcnemar_test
+try:
+    from data_loader import load_malaria_data, load_tb_data
+    from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
+    from train import compile_model, train_model, unfreeze_and_finetune
+    from utils import plot_training_history, make_gradcam_heatmap, display_gradcam, evaluate_comprehensive_metrics, perform_mcnemar_test
+except ImportError:
+    print("Please restart the runtime/kernel after installing dependencies if you get an ImportError, then run this cell again.")
 """)
 
-data_cell_md = nbf.v4.new_markdown_cell("## 1. Load Datasets\nEnsure you have run `python src/download_data.py` to acquire the data.")
-data_cell_code = nbf.v4.new_code_cell("""# Load Malaria Data
-print("Loading Malaria Dataset...")
+data_cell_md = nbf.v4.new_markdown_cell("## 1. Download and Load Datasets\nThis will automatically download the datasets if they are not already present.")
+data_cell_code = nbf.v4.new_code_cell("""# Download Data
+!python src/download_data.py
+
+# Load Malaria Data
+print("\\nLoading Malaria Dataset...")
 base_dir = os.path.abspath('.')
 malaria_train, malaria_val = load_malaria_data(base_dir, batch_size=32)
 
