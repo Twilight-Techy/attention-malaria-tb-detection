@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import cv2
-from sklearn.metrics import confusion_matrix, f1_score, mean_absolute_error, mean_squared_error
+from sklearn.metrics import confusion_matrix, f1_score, mean_absolute_error, mean_squared_error, accuracy_score, precision_score, recall_score, roc_curve, auc
 from statsmodels.stats.contingency_tables import mcnemar
 
 def evaluate_comprehensive_metrics(y_true, y_pred_probs, threshold=0.5):
@@ -13,18 +13,58 @@ def evaluate_comprehensive_metrics(y_true, y_pred_probs, threshold=0.5):
     
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
     
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, zero_division=0)
+    recall = recall_score(y_true, y_pred, zero_division=0)
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
     f1 = f1_score(y_true, y_pred)
     mae = mean_absolute_error(y_true, y_pred_probs)
     rmse = np.sqrt(mean_squared_error(y_true, y_pred_probs))
     
     print("--- Comprehensive Evaluation Metrics ---")
+    print(f"Accuracy:    {accuracy:.4f}")
+    print(f"Sensitivity: {recall:.4f}")
     print(f"Specificity: {specificity:.4f}")
+    print(f"Precision:   {precision:.4f}")
     print(f"F1-Score:    {f1:.4f}")
     print(f"MAE:         {mae:.4f}")
     print(f"RMSE:        {rmse:.4f}")
     
-    return {'specificity': specificity, 'f1': f1, 'mae': mae, 'rmse': rmse}
+    return {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'specificity': specificity, 'f1': f1, 'mae': mae, 'rmse': rmse}
+
+def plot_comparative_roc(y_true, predictions_dict, title="Comparative ROC Curve"):
+    plt.figure(figsize=(10, 8))
+    for model_name, y_pred_probs in predictions_dict.items():
+        fpr, tpr, _ = roc_curve(y_true, y_pred_probs)
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, lw=2, label=f'{model_name} (AUC = {roc_auc:.3f})')
+        
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.show()
+
+def plot_comparative_bar_chart(df, metric='F1-Score', title=None):
+    if df.empty: return
+    plt.figure(figsize=(10, 6))
+    models = df['Architecture']
+    values = df[metric]
+    bars = plt.bar(models, values, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
+    
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval + (max(values)*0.01), f'{yval:.3f}', ha='center', va='bottom')
+        
+    plt.xlabel('Architecture')
+    plt.ylabel(metric)
+    plt.title(title if title else f'Comparative {metric}')
+    plt.ylim(0, max(values) * 1.1)
+    plt.xticks(rotation=15)
+    plt.show()
 
 def perform_mcnemar_test(y_true, y_pred_model1, y_pred_model2, threshold=0.5):
     """

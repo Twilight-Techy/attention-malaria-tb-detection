@@ -33,7 +33,8 @@ try:
     from data_loader import load_malaria_data, load_tb_data
     from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
     from train import compile_model, train_model, unfreeze_and_finetune
-    from utils import plot_training_history, make_gradcam_heatmap, display_gradcam, evaluate_comprehensive_metrics, perform_mcnemar_test
+    from utils import plot_training_history, make_gradcam_heatmap, display_gradcam, evaluate_comprehensive_metrics, perform_mcnemar_test, plot_comparative_roc, plot_comparative_bar_chart
+    from benchmark import evaluate_all_models
 except ImportError:
     print("Please restart the runtime/kernel after installing dependencies if you get an ImportError, then run this cell again.")
 """)
@@ -148,6 +149,33 @@ eval_cell_code = nbf.v4.new_code_cell("""# Load the BEST weights that were saved
 """)
 
 nb.cells.extend([eval_cell_md, eval_cell_code])
+
+benchmark_cell_md = nbf.v4.new_markdown_cell("## 7. Results Chapter Benchmarking\nAutomatically load all saved models, measure latency, parameters, and generate comparative tables and ROC curves. **Run this after training multiple architectures.**")
+benchmark_cell_code = nbf.v4.new_code_cell("""# Define a dictionary mapping the architecture names to their saved model file paths
+models_dict = {
+    "Custom CNN": f"best_{dataset_name}_Custom_CNN_Attention.h5",
+    "ResNet50": f"best_{dataset_name}_ResNet50_Attention.h5",
+    "VGG16": f"best_{dataset_name}_VGG16_Attention.h5",
+    "MobileNetV2": f"best_{dataset_name}_MobileNetV2_Attention.h5",
+    "DenseNet121": f"best_{dataset_name}_DenseNet121_Attention.h5"
+}
+
+# 1. Generate DataFrame with Latency, Params, Size, and Classification Metrics
+# df, y_true, predictions_dict = evaluate_all_models(models_dict, malaria_val, dataset_name, output_csv=f"comparative_results_{dataset_name}.csv")
+
+# 2. Display the generated table (Copy this into your Results Chapter)
+# display(df)
+
+# 3. Plot Overlaid ROC Curves
+# plot_comparative_roc(y_true, predictions_dict, title=f"Comparative ROC Curves ({dataset_name.upper()})")
+
+# 4. Plot Comparative Bar Charts
+# plot_comparative_bar_chart(df, metric='Accuracy')
+# plot_comparative_bar_chart(df, metric='F1-Score')
+# plot_comparative_bar_chart(df, metric='Latency (ms/image)')
+""")
+
+nb.cells.extend([benchmark_cell_md, benchmark_cell_code])
 
 with open('c:/MyProjects/ml/main.ipynb', 'w') as f:
     nbf.write(nb, f)
