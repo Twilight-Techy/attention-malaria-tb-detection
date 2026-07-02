@@ -32,7 +32,7 @@ def evaluate_comprehensive_metrics(y_true, y_pred_probs, threshold=0.5):
     
     return {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'specificity': specificity, 'f1': f1, 'mae': mae, 'rmse': rmse}
 
-def plot_comparative_roc(y_true, predictions_dict, title="Comparative ROC Curve"):
+def plot_comparative_roc(y_true, predictions_dict, title="Comparative ROC Curve", save_path=None):
     plt.figure(figsize=(10, 8))
     for model_name, y_pred_probs in predictions_dict.items():
         fpr, tpr, _ = roc_curve(y_true, y_pred_probs)
@@ -46,9 +46,11 @@ def plot_comparative_roc(y_true, predictions_dict, title="Comparative ROC Curve"
     plt.ylabel('True Positive Rate')
     plt.title(title)
     plt.legend(loc="lower right")
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
     plt.show()
 
-def plot_comparative_bar_chart(df, metric='F1-Score', title=None):
+def plot_comparative_bar_chart(df, metric='F1-Score', title=None, save_path=None):
     if df.empty: return
     plt.figure(figsize=(10, 6))
     models = df['Architecture']
@@ -64,6 +66,8 @@ def plot_comparative_bar_chart(df, metric='F1-Score', title=None):
     plt.title(title if title else f'Comparative {metric}')
     plt.ylim(0, max(values) * 1.1)
     plt.xticks(rotation=15)
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
     plt.show()
 
 def perform_mcnemar_test(y_true, y_pred_model1, y_pred_model2, threshold=0.5):

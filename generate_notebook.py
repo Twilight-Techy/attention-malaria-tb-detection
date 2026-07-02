@@ -123,10 +123,10 @@ for dataset_name in datasets_to_run:
     display(df)
     
     print("\\nGenerating ROC Curves...")
-    plot_comparative_roc(y_true, predictions_dict, title=f"Comparative ROC Curves ({dataset_name.upper()})")
+    plot_comparative_roc(y_true, predictions_dict, title=f"Comparative ROC Curves ({dataset_name.upper()})", save_path=f"comparative_roc_{dataset_name}.png")
     
     print("\\nGenerating F1-Score Bar Chart...")
-    plot_comparative_bar_chart(df, metric='F1-Score', title=f"F1-Score Comparison ({dataset_name.upper()})")
+    plot_comparative_bar_chart(df, metric='F1-Score', title=f"F1-Score Comparison ({dataset_name.upper()})", save_path=f"comparative_f1_{dataset_name}.png")
     
     # 4. Clean up Dataset from RAM before loading the next disease
     del train_data
