@@ -33,7 +33,7 @@ os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56' # Hardcoded API Ke
 sys.path.append(os.path.abspath('src'))
 
 try:
-    from data_loader import load_malaria_data, load_tb_data
+    from data_loader import load_malaria_data, load_tb_data, load_full_production_dataset
     from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
     from train import compile_model, train_model, unfreeze_and_finetune
     from utils import plot_training_history, plot_comparative_roc, plot_comparative_bar_chart
@@ -127,7 +127,47 @@ for dataset_name in datasets_to_run:
 print("\\n\\nPIPELINE COMPLETE. All experiments successfully finished and data saved.")
 """)
 
-nb.cells = [title_cell, setup_cell, data_cell, loop_cell_md, loop_cell_code]
+production_md = nbf.v4.new_markdown_cell("""## 8. Final Production Deployment Pipeline
+**[POST-THESIS ONLY]** Once you have completed your academic benchmarks above, you will identify your absolute best-performing architecture for Malaria and Tuberculosis. 
+
+To prepare for actual hospital deployment (Section 1.5.v of the report), you should retrain that winning architecture on **100% of the available data** (Train + Val + Test merged into one).
+Below is the template to generate your final deployment `.h5` model. Uncomment and run it when ready!
+""")
+
+production_code = nbf.v4.new_code_cell("""'''
+# Example: Assuming MobileNetV2 won the benchmark for Malaria
+deployment_dataset = "malaria"
+print(f"\\n{'='*50}\\nSTARTING PRODUCTION DEPLOYMENT PIPELINE FOR: {deployment_dataset.upper()}\\n{'='*50}")
+
+# 1. Load 100% of data (NO SPLITS)
+production_data = load_full_production_dataset(base_dir, dataset_name=deployment_dataset, batch_size=32)
+
+# 2. Build winning architecture
+K.clear_session()
+final_model = build_mobilenetv2_attention()
+final_model = compile_model(final_model, learning_rate=1e-4)
+final_save_path = f"FINAL_PRODUCTION_{deployment_dataset}_MobileNetV2.h5"
+
+# 3. Train on 100% data (Fixed Epochs, No Early Stopping since there is no val_data)
+# Note: For production, we manually enforce the epoch count since Early Stopping requires a validation set.
+print(f"\\nPhase 1: Freezing Base Layers...")
+final_model.fit(production_data, epochs=15) # Fit directly without val_data
+
+print(f"\\nPhase 2: Fine-Tuning Top Layers...")
+final_model.trainable = True
+# Unfreeze top 20 layers
+for layer in final_model.layers[:-20]:
+    layer.trainable = False
+final_model = compile_model(final_model, learning_rate=1e-5)
+final_model.fit(production_data, epochs=10)
+
+# 4. Save Final Production Model
+final_model.save(final_save_path)
+print(f"\\nSUCCESS! Final deployment model saved to: {final_save_path}")
+'''
+""")
+
+nb.cells = [title_cell, setup_cell, data_cell, loop_cell_md, loop_cell_code, production_md, production_code]
 
 with open('c:/MyProjects/ml/main.ipynb', 'w') as f:
     nbf.write(nb, f)

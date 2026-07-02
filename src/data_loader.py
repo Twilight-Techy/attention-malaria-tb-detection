@@ -103,3 +103,34 @@ def load_tb_data(base_dir, batch_size=32):
     # Update the inner path depending on how it unzips.
     data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
     return create_data_generators(data_dir, batch_size=batch_size)
+
+def load_full_production_dataset(base_dir, dataset_name="malaria", target_size=(224, 224), batch_size=32):
+    """
+    Loads 100% of the raw images into a single training generator (no validation/test split).
+    Used EXCLUSIVELY for final production deployment model training.
+    """
+    if dataset_name == "malaria":
+        data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
+    else:
+        data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
+        
+    train_datagen = ImageDataGenerator(
+        rescale=1./255, 
+        preprocessing_function=advanced_preprocessing,
+        rotation_range=15,
+        horizontal_flip=True,
+        zoom_range=[0.9, 1.1],
+        brightness_range=[0.8, 1.2],
+        width_shift_range=0.05, 
+        height_shift_range=0.05
+    )
+    
+    print(f"Loading 100% of {dataset_name} data for Final Production Deployment from {data_dir}...")
+    production_generator = train_datagen.flow_from_directory(
+        data_dir,
+        target_size=target_size,
+        batch_size=batch_size,
+        class_mode='binary',
+        shuffle=True
+    )
+    return production_generator
