@@ -1,6 +1,16 @@
 import nbformat as nbf
 
 nb = nbf.v4.new_notebook()
+nb.metadata = {
+    "kernelspec": {
+        "display_name": "Python 3",
+        "language": "python",
+        "name": "python3"
+    },
+    "language_info": {
+        "name": "python"
+    }
+}
 
 title_cell = nbf.v4.new_markdown_cell("""# Automated End-to-End Deep Learning Framework for Malaria and Tuberculosis
 **Author:** Muhammed Toheeb Abdulraheem
