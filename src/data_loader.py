@@ -3,6 +3,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import os
 import cv2
 import numpy as np
+import splitfolders
 
 def advanced_preprocessing(img):
     """
@@ -34,63 +35,64 @@ def advanced_preprocessing(img):
 
 def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     """
-    Creates train, validation, and test data generators for a given dataset directory.
-    Assumes directory structure:
-    data_dir/
-      class_1/
-      class_2/
+    Physically splits the data into Train (70%), Validation (15%), and Test (15%) subsets.
+    Then creates distinct generators for each split to prevent data leakage.
     """
-    # 70% Train, 15% Val, 15% Test Split via Data Augmentation Validation Split
-    # Since flow_from_directory only supports a single validation split, 
-    # we'll use 70% train and 30% val/test. We can manually split val and test later if needed,
-    # or just use 70/15/15 if the dataset is already partitioned.
-    # For simplicity, we'll configure a 70/30 split and use a portion of the 30 for testing.
+    output_dir = data_dir + "_split"
     
-    # Data Augmentation specific to the report's requirements:
-    # Rotation (+/- 15), Horizontal Flip, Scaling (Zoom 0.9-1.1), Brightness
+    if not os.path.exists(output_dir):
+        print(f"Splitting dataset into Train/Val/Test subsets in {output_dir}...")
+        splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=(0.7, 0.15, 0.15), group_prefix=None)
+    
+    train_dir = os.path.join(output_dir, "train")
+    val_dir = os.path.join(output_dir, "val")
+    test_dir = os.path.join(output_dir, "test")
+
+    # Data Augmentation specific to the report's requirements
     train_datagen = ImageDataGenerator(
-        rescale=1./255, # Normalization
+        rescale=1./255, 
         preprocessing_function=advanced_preprocessing,
         rotation_range=15,
         horizontal_flip=True,
         zoom_range=[0.9, 1.1],
         brightness_range=[0.8, 1.2],
-        width_shift_range=0.05,  # Minor translation
-        height_shift_range=0.05,
-        validation_split=0.3 # 30% for validation + test
+        width_shift_range=0.05, 
+        height_shift_range=0.05
     )
 
-    # For validation/test, only rescale (normalize)
+    # For validation and test, strictly only rescaling and preprocessing (No Augmentation)
     test_datagen = ImageDataGenerator(
         rescale=1./255,
-        preprocessing_function=advanced_preprocessing,
-        validation_split=0.3
+        preprocessing_function=advanced_preprocessing
     )
 
-    print(f"Loading data from {data_dir}...")
+    print(f"Loading split generators from {output_dir}...")
     
     train_generator = train_datagen.flow_from_directory(
-        data_dir,
+        train_dir,
         target_size=target_size,
         batch_size=batch_size,
         class_mode='binary',
-        subset='training',
         shuffle=True
     )
 
-    # We use validation split for both val and test. 
-    # To rigorously split 15/15, in practice we'd write a custom split script,
-    # but using the generator validation split for both is standard for quick pipelines.
     val_generator = test_datagen.flow_from_directory(
-        data_dir,
+        val_dir,
         target_size=target_size,
         batch_size=batch_size,
         class_mode='binary',
-        subset='validation',
         shuffle=False
     )
     
-    return train_generator, val_generator
+    test_generator = test_datagen.flow_from_directory(
+        test_dir,
+        target_size=target_size,
+        batch_size=batch_size,
+        class_mode='binary',
+        shuffle=False
+    )
+    
+    return train_generator, val_generator, test_generator
 
 def load_malaria_data(base_dir, batch_size=32):
     data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")

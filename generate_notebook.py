@@ -65,9 +65,9 @@ for dataset_name in datasets_to_run:
     
     # 1. Load Data (Loads directly into RAM)
     if dataset_name == "malaria":
-        train_data, val_data = load_malaria_data(base_dir, batch_size=32)
+        train_data, val_data, test_data = load_malaria_data(base_dir, batch_size=32)
     else:
-        train_data, val_data = load_tb_data(base_dir, batch_size=32)
+        train_data, val_data, test_data = load_tb_data(base_dir, batch_size=32)
         
     models_dict = {}
     
@@ -107,7 +107,7 @@ for dataset_name in datasets_to_run:
             
     # 3. Benchmark Dataset (Generates Results Chapter Tables/Graphs)
     print(f"\\n--- [ Benchmarking All {dataset_name.upper()} Architectures ] ---")
-    df, y_true, predictions_dict = evaluate_all_models(models_dict, val_data, dataset_name, output_csv=f"comparative_results_{dataset_name}.csv")
+    df, y_true, predictions_dict = evaluate_all_models(models_dict, test_data, dataset_name, output_csv=f"comparative_results_{dataset_name}.csv")
     
     print("\\nFinal Comparative DataFrame:")
     display(df)
@@ -121,6 +121,7 @@ for dataset_name in datasets_to_run:
     # 4. Clean up Dataset from RAM before loading the next disease
     del train_data
     del val_data
+    del test_data
     gc.collect()
     
 print("\\n\\nPIPELINE COMPLETE. All experiments successfully finished and data saved.")
