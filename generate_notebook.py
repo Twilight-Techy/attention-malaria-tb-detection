@@ -85,6 +85,11 @@ for dataset_name in datasets_to_run:
         save_path = f"best_{dataset_name}_{model.name}.h5"
         models_dict[model_name] = save_path
         
+        # FAULT TOLERANCE: Skip if already trained
+        if os.path.exists(save_path):
+            print(f"\\n[RESUME] Found existing {save_path}. Skipping training for this model!")
+            continue
+        
         # Train (Base Layers Frozen)
         print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
         train_model(model, train_data, val_data, epochs=15, model_path=save_path)
