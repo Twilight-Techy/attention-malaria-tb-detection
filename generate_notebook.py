@@ -24,6 +24,7 @@ It concludes by generating the final comparative CSV tables, ROC curves, and bar
 setup_cell = nbf.v4.new_code_cell("""import sys
 import os
 import gc
+import subprocess
 import tensorflow.keras.backend as K
 import getpass
 import pandas as pd
@@ -31,7 +32,7 @@ from IPython.display import display
 
 # 1. Install Dependencies
 print("Installing dependencies...")
-!pip install -q -r requirements.txt
+subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"])
 
 # 2. Setup Kaggle Credentials
 print("\\nAuthenticating with Kaggle...")
@@ -53,7 +54,9 @@ except ImportError:
 """)
 
 data_cell = nbf.v4.new_code_cell("""# Download both datasets to the local VM disk
-!python src/download_data.py
+import subprocess
+print("Running data downloader...")
+subprocess.check_call([sys.executable, "src/download_data.py"])
 base_dir = os.path.abspath('.')
 """)
 
