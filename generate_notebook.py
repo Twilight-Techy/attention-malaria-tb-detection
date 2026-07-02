@@ -85,10 +85,13 @@ for dataset_name in datasets_to_run:
         save_path = f"best_{dataset_name}_{model.name}.h5"
         models_dict[model_name] = save_path
         
-        # FAULT TOLERANCE: Skip if already trained
-        if os.path.exists(save_path):
-            print(f"\\n[RESUME] Found existing {save_path}. Skipping training for this model!")
+        # FAULT TOLERANCE: Skip if completely finished previously
+        completion_marker = f"{save_path}.done"
+        if os.path.exists(completion_marker):
+            print(f"\\n[RESUME] Model {model.name} fully completed previously. Skipping to next!")
             continue
+        elif os.path.exists(save_path):
+            print(f"\\n[RESUME] Found partial {save_path} but no completion marker. Restarting training for this model to ensure full completion.")
         
         # Train (Base Layers Frozen)
         print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
@@ -98,6 +101,10 @@ for dataset_name in datasets_to_run:
         print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
         unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5)
         
+        # Mark as completely finished
+        with open(completion_marker, 'w') as f:
+            f.write("training and finetuning complete")
+            
     # 3. Benchmark Dataset (Generates Results Chapter Tables/Graphs)
     print(f"\\n--- [ Benchmarking All {dataset_name.upper()} Architectures ] ---")
     df, y_true, predictions_dict = evaluate_all_models(models_dict, val_data, dataset_name, output_csv=f"comparative_results_{dataset_name}.csv")
