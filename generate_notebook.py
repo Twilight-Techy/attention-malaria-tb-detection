@@ -104,11 +104,17 @@ for dataset_name in datasets_to_run:
             print(f"\\n[RESUME] Model {model.name} fully completed previously. Skipping to next!")
             continue
         elif os.path.exists(save_path):
-            print(f"\\n[RESUME] Found partial {save_path} but no completion marker. Restarting training for this model to ensure full completion.")
-        
-        # Train (Base Layers Frozen)
-        print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
-        train_model(model, train_data, val_data, epochs=15, model_path=save_path)
+            print(f"\\n[RESUME] Found successful Phase 1 weights ({save_path}) but no completion marker.")
+            print(f"Loading weights and jumping straight to Phase 2 (Fine-Tuning) to save time!")
+            model.load_weights(save_path)
+            phase1_completed = True
+        else:
+            phase1_completed = False
+            
+        if not phase1_completed:
+            # Train (Base Layers Frozen)
+            print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
+            train_model(model, train_data, val_data, epochs=15, model_path=save_path)
         
         # Fine-Tune (Unfreezing Top Layers)
         print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
