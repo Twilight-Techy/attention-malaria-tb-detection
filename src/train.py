@@ -17,7 +17,7 @@ def compile_model(model, learning_rate=1e-4):
     )
     return model
 
-def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h5'):
+def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h5', csv_log_path=None):
     """
     Train the model with callbacks for early stopping, checkpointing, and LR scheduling.
     """
@@ -27,6 +27,9 @@ def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h
         ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1),
         tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase1_{model_path}")
     ]
+    
+    if csv_log_path:
+        callbacks.append(tf.keras.callbacks.CSVLogger(csv_log_path, append=True))
     
     print(f"Starting training for {model.name}...")
     
@@ -39,7 +42,7 @@ def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h
     
     return history
 
-def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, epochs=10, learning_rate=1e-5):
+def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, epochs=10, learning_rate=1e-5, csv_log_path=None):
     """
     Unfreeze the top layers of the model for fine-tuning.
     """
@@ -56,6 +59,9 @@ def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, ep
     callbacks = [
         tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase2_{model.name}")
     ]
+    
+    if csv_log_path:
+        callbacks.append(tf.keras.callbacks.CSVLogger(csv_log_path, append=True))
     
     history = model.fit(
         train_data,

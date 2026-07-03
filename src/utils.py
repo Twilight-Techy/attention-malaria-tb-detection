@@ -32,6 +32,46 @@ def evaluate_comprehensive_metrics(y_true, y_pred_probs, threshold=0.5):
     
     return {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'specificity': specificity, 'f1': f1, 'mae': mae, 'rmse': rmse}
 
+def plot_training_history_from_csv(csv_path, title="Training History"):
+    """
+    Reads a CSV log file and plots the training and validation loss/accuracy.
+    """
+    import pandas as pd
+    import os
+    
+    if not os.path.exists(csv_path):
+        print(f"Log file {csv_path} not found.")
+        return
+        
+    df = pd.read_csv(csv_path)
+    
+    plt.figure(figsize=(12, 4))
+
+    # Plot Accuracy
+    plt.subplot(1, 2, 1)
+    if 'accuracy' in df.columns:
+        plt.plot(df['epoch'], df['accuracy'], label='Train Accuracy', marker='o')
+    if 'val_accuracy' in df.columns:
+        plt.plot(df['epoch'], df['val_accuracy'], label='Val Accuracy', marker='o')
+    plt.title(f'{title} - Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+
+    # Plot Loss
+    plt.subplot(1, 2, 2)
+    if 'loss' in df.columns:
+        plt.plot(df['epoch'], df['loss'], label='Train Loss', marker='o')
+    if 'val_loss' in df.columns:
+        plt.plot(df['epoch'], df['val_loss'], label='Val Loss', marker='o')
+    plt.title(f'{title} - Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
 def plot_comparative_roc(y_true, predictions_dict, title="Comparative ROC Curve", save_path=None):
     plt.figure(figsize=(10, 8))
     for model_name, y_pred_probs in predictions_dict.items():

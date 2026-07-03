@@ -151,10 +151,12 @@ for dataset_name in datasets_to_run:
         else:
             phase1_completed = False
             
+        log_path = f"training_log_{dataset_name}_{model.name}.csv"
+        
         if not phase1_completed:
             # Train (Base Layers Frozen)
             print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
-            train_model(model, train_data, val_data, epochs=15, model_path=save_path)
+            train_model(model, train_data, val_data, epochs=15, model_path=save_path, csv_log_path=log_path)
             
             # Mark Phase 1 as completely finished
             with open(phase1_marker, 'w') as f:
@@ -162,7 +164,7 @@ for dataset_name in datasets_to_run:
         
         # Fine-Tune (Unfreezing Top Layers)
         print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
-        unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5)
+        unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path)
         
         # Mark as completely finished
         with open(completion_marker, 'w') as f:
