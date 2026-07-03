@@ -110,6 +110,12 @@ for dataset_name in datasets_to_run:
     else:
         train_data, val_data, test_data = load_tb_data(base_dir, batch_size=32)
         
+    # 1.5. Exploratory Data Analysis
+    print(f"\\n--- [ Exploratory Data Analysis for {dataset_name.upper()} ] ---")
+    from utils import plot_class_distribution, plot_sample_images
+    plot_class_distribution(train_data, dataset_name, save_path=f"eda_distribution_{dataset_name}.png")
+    plot_sample_images(train_data, dataset_name, save_path=f"eda_samples_{dataset_name}.png")
+        
     models_dict = {}
     
     # 2. Iterate and Train Models

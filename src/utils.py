@@ -179,3 +179,60 @@ def display_gradcam(img_path, heatmap, alpha=0.4):
     plt.title("Grad-CAM")
     plt.imshow(superimposed_img)
     plt.show()
+
+def plot_class_distribution(train_gen, dataset_name, save_path=None):
+    """
+    Plots a bar chart showing the balance of classes in the training set.
+    """
+    import collections
+    
+    class_indices = train_gen.class_indices
+    labels_dict = {v: k for k, v in class_indices.items()}
+    
+    counts = collections.Counter(train_gen.classes)
+    
+    classes = [labels_dict[i] for i in counts.keys()]
+    values = list(counts.values())
+    
+    plt.figure(figsize=(8, 6))
+    bars = plt.bar(classes, values, color=['#1f77b4', '#ff7f0e'][:len(classes)])
+    plt.title(f'{dataset_name.upper()} - Training Class Distribution')
+    plt.ylabel('Number of Images')
+    
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval + (max(values)*0.01), int(yval), ha='center', va='bottom')
+        
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+    plt.show()
+
+def plot_sample_images(train_gen, dataset_name, num_images=16, save_path=None):
+    """
+    Plots a 4x4 grid of sample images with their corresponding labels.
+    """
+    images, labels = next(train_gen)
+    
+    class_indices = train_gen.class_indices
+    labels_dict = {v: k for k, v in class_indices.items()}
+    
+    plt.figure(figsize=(10, 10))
+    plt.suptitle(f"Sample {dataset_name.upper()} Images", fontsize=16)
+    
+    grid_size = int(np.ceil(np.sqrt(num_images)))
+    for i in range(min(num_images, len(images))):
+        plt.subplot(grid_size, grid_size, i + 1)
+        plt.imshow(images[i])
+        
+        if len(labels.shape) > 1 and labels.shape[1] > 1:
+            class_idx = np.argmax(labels[i])
+        else:
+            class_idx = int(labels[i])
+            
+        plt.title(labels_dict.get(class_idx, "Unknown"))
+        plt.axis('off')
+        
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+    plt.show()
