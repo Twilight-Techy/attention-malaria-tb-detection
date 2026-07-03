@@ -100,14 +100,20 @@ for dataset_name in datasets_to_run:
         
         # FAULT TOLERANCE: Skip if completely finished previously
         completion_marker = f"{save_path}.done"
+        phase1_marker = f"{save_path}.phase1_done"
+        
         if os.path.exists(completion_marker):
             print(f"\\n[RESUME] Model {model.name} fully completed previously. Skipping to next!")
             continue
-        elif os.path.exists(save_path):
-            print(f"\\n[RESUME] Found successful Phase 1 weights ({save_path}) but no completion marker.")
+        elif os.path.exists(save_path) and os.path.exists(phase1_marker):
+            print(f"\\n[RESUME] Found successful Phase 1 weights ({save_path}) and phase 1 completion marker.")
             print(f"Loading weights and jumping straight to Phase 2 (Fine-Tuning) to save time!")
             model.load_weights(save_path)
             phase1_completed = True
+        elif os.path.exists(save_path) and not os.path.exists(phase1_marker):
+            print(f"\\n[RESUME] Found partial Phase 1 weights ({save_path}) but NO phase 1 completion marker.")
+            print(f"Phase 1 crashed mid-training. Restarting Phase 1 from scratch to prevent corrupt weights.")
+            phase1_completed = False
         else:
             phase1_completed = False
             
@@ -115,6 +121,10 @@ for dataset_name in datasets_to_run:
             # Train (Base Layers Frozen)
             print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
             train_model(model, train_data, val_data, epochs=15, model_path=save_path)
+            
+            # Mark Phase 1 as completely finished
+            with open(phase1_marker, 'w') as f:
+                f.write("phase 1 complete")
         
         # Fine-Tune (Unfreezing Top Layers)
         print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
