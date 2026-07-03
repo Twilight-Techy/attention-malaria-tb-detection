@@ -249,27 +249,41 @@ def plot_class_distribution(train_gen, dataset_name, save_path=None):
 
 def plot_sample_images(train_gen, dataset_name, num_images=16, save_path=None):
     """
-    Plots a 4x4 grid of sample images with their corresponding labels.
+    Plots a grid of sample images, guaranteeing an equal split between classes.
     """
-    images, labels = next(train_gen)
+    import numpy as np
     
     class_indices = train_gen.class_indices
     labels_dict = {v: k for k, v in class_indices.items()}
+    
+    target_per_class = num_images // 2
+    collected_images = {0: [], 1: []}
+    
+    while len(collected_images[0]) < target_per_class or len(collected_images[1]) < target_per_class:
+        images, labels = next(train_gen)
+        for i in range(len(images)):
+            if len(labels.shape) > 1 and labels.shape[1] > 1:
+                class_idx = np.argmax(labels[i])
+            else:
+                class_idx = int(labels[i])
+                
+            if class_idx in collected_images and len(collected_images[class_idx]) < target_per_class:
+                collected_images[class_idx].append(images[i])
+                
+            if len(collected_images[0]) >= target_per_class and len(collected_images[1]) >= target_per_class:
+                break
+                
+    final_images = collected_images[0] + collected_images[1]
+    final_labels = [0] * target_per_class + [1] * target_per_class
     
     plt.figure(figsize=(10, 10))
     plt.suptitle(f"Sample {dataset_name.upper()} Images", fontsize=16)
     
     grid_size = int(np.ceil(np.sqrt(num_images)))
-    for i in range(min(num_images, len(images))):
+    for i in range(num_images):
         plt.subplot(grid_size, grid_size, i + 1)
-        plt.imshow(images[i])
-        
-        if len(labels.shape) > 1 and labels.shape[1] > 1:
-            class_idx = np.argmax(labels[i])
-        else:
-            class_idx = int(labels[i])
-            
-        plt.title(labels_dict.get(class_idx, "Unknown"))
+        plt.imshow(final_images[i])
+        plt.title(labels_dict.get(final_labels[i], "Unknown"))
         plt.axis('off')
         
     plt.tight_layout()

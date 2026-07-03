@@ -152,7 +152,7 @@ for dataset_name in datasets_to_run:
             phase1_completed = True
         elif os.path.exists(save_path) and not os.path.exists(phase1_marker):
             print(f"\\n[RESUME] Found partial Phase 1 weights ({save_path}) but NO phase 1 completion marker.")
-            print(f"Phase 1 crashed mid-training. Restarting Phase 1 from scratch to prevent corrupt weights.")
+            print(f"Phase 1 crashed mid-training. Re-invoking Phase 1 (Keras will automatically resume from the exact epoch using your Backup Folder).")
             phase1_completed = False
         else:
             phase1_completed = False
