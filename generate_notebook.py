@@ -18,7 +18,35 @@ title_cell = nbf.v4.new_markdown_cell("""# Automated End-to-End Deep Learning Fr
 **Abstract:**
 This notebook contains an **Automated Master Execution Loop**. It is designed to autonomously download datasets, load them into memory sequentially, and train all five attention-improved architectures (Custom CNN, ResNet50, VGG16, MobileNetV2, DenseNet121) across both the Malaria and Tuberculosis datasets. To prevent GPU Out-of-Memory (OOM) errors, it implements strict garbage collection and Keras session clearing between each architecture. 
 
-It concludes by generating the final comparative CSV tables, ROC curves, and bar charts required for the Results chapter.
+    It concludes by generating the final comparative CSV tables, ROC curves, and bar charts required for the Results chapter.
+""")
+
+colab_setup_cell = nbf.v4.new_code_cell("""# =========================================================================
+# 1. OPTIONAL: COLAB ENVIRONMENT SETUP & DRIVE SYNC
+# =========================================================================
+# If running in Google Colab, this cell will safely mount your Google Drive, 
+# pull any previously trained weights to resume from crashes, and start a 
+# background loop that saves your progress every 2 minutes!
+
+try:
+    from google.colab import drive
+    import os
+    print("Google Colab environment detected. Mounting Drive...")
+    drive.mount('/content/drive')
+    
+    # Auto-resume pulls
+    get_ipython().system('mkdir -p /content/drive/MyDrive/Thesis_Results')
+    get_ipython().system('cp /content/drive/MyDrive/Thesis_Results/*.h5 . 2>/dev/null || true')
+    get_ipython().system('cp /content/drive/MyDrive/Thesis_Results/*.done . 2>/dev/null || true')
+    get_ipython().system('cp /content/drive/MyDrive/Thesis_Results/*.phase1_done . 2>/dev/null || true')
+    get_ipython().system('cp -r /content/drive/MyDrive/Thesis_Results/backup_* . 2>/dev/null || true')
+    
+    # Background sync
+    get_ipython().system_raw('while true; do cp *.h5 *.done *.phase1_done *.csv *.png /content/drive/MyDrive/Thesis_Results/ 2>/dev/null; cp -r backup_* /content/drive/MyDrive/Thesis_Results/ 2>/dev/null; sleep 120; done &')
+    print("Background Drive Sync initialized! Your progress is safe.")
+    
+except ImportError:
+    print("Local environment detected. Skipping Google Drive mount and sync.")
 """)
 
 setup_cell = nbf.v4.new_code_cell("""import sys
@@ -196,7 +224,7 @@ print(f"\\nSUCCESS! Final deployment model saved to: {final_save_path}")
 '''
 """)
 
-nb.cells = [title_cell, setup_cell, data_cell, loop_cell_md, loop_cell_code, production_md, production_code]
+nb.cells = [title_cell, colab_setup_cell, setup_cell, data_cell, loop_cell_md, loop_cell_code, production_md, production_code]
 
 with open('c:/MyProjects/ml/main.ipynb', 'w') as f:
     nbf.write(nb, f)
