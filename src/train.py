@@ -24,7 +24,8 @@ def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h
     callbacks = [
         EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1),
         ModelCheckpoint(filepath=model_path, monitor='val_accuracy', save_best_only=True, verbose=1),
-        ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1)
+        ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1),
+        tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase1_{model_path}")
     ]
     
     print(f"Starting training for {model.name}...")
@@ -51,11 +52,16 @@ def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, ep
     # Recompile with a lower learning rate
     model = compile_model(model, learning_rate=learning_rate)
     
-    # Train again
+    # Train again with BackupAndRestore for Phase 2
+    callbacks = [
+        tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase2_{model.name}")
+    ]
+    
     history = model.fit(
         train_data,
         validation_data=val_data,
-        epochs=epochs
+        epochs=epochs,
+        callbacks=callbacks
     )
     
     return history
