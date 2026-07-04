@@ -170,7 +170,7 @@ for dataset_name in datasets_to_run:
         
         # Fine-Tune (Unfreezing Top Layers)
         print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
-        unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path)
+        unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path, model_path=save_path, initial_epoch=15)
         
         # Mark as completely finished
         with open(completion_marker, 'w') as f:

@@ -42,7 +42,7 @@ def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h
     
     return history
 
-def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, epochs=10, learning_rate=1e-5, csv_log_path=None):
+def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, epochs=10, learning_rate=1e-5, csv_log_path=None, model_path=None, initial_epoch=15):
     """
     Unfreeze the top layers of the model for fine-tuning.
     """
@@ -56,17 +56,22 @@ def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, ep
     model = compile_model(model, learning_rate=learning_rate)
     
     # Train again with BackupAndRestore for Phase 2
+    backup_name = model_path if model_path else model.name
     callbacks = [
-        tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase2_{model.name}")
+        tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase2_{backup_name}")
     ]
     
+    if model_path:
+        callbacks.append(ModelCheckpoint(filepath=model_path, monitor='val_accuracy', save_best_only=True, verbose=1))
+        
     if csv_log_path:
         callbacks.append(tf.keras.callbacks.CSVLogger(csv_log_path, append=True))
     
     history = model.fit(
         train_data,
         validation_data=val_data,
-        epochs=epochs,
+        initial_epoch=initial_epoch,
+        epochs=initial_epoch + epochs,
         callbacks=callbacks
     )
     
