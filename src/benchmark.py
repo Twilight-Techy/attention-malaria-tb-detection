@@ -36,7 +36,7 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
     all_images = []
     
     print("Extracting test data for benchmarking...")
-    batches = 15 
+    batches = len(test_data) 
     count = 0
     for img, labels in test_data:
         y_true.extend(labels)
