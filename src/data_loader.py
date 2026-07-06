@@ -106,13 +106,16 @@ def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     
     # Parallel CPU processing
     train_ds = train_ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
+    train_ds = train_ds.cache(os.path.join(output_dir, "train_cache"))
     train_ds = train_ds.map(train_augment, num_parallel_calls=tf.data.AUTOTUNE)
     train_ds = train_ds.prefetch(tf.data.AUTOTUNE)
     
     val_ds = val_ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
+    val_ds = val_ds.cache(os.path.join(output_dir, "val_cache"))
     val_ds = val_ds.prefetch(tf.data.AUTOTUNE)
     
     test_ds = test_ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
+    test_ds = test_ds.cache(os.path.join(output_dir, "test_cache"))
     test_ds = test_ds.prefetch(tf.data.AUTOTUNE)
     
     return train_ds, val_ds, test_ds
@@ -148,6 +151,8 @@ def load_full_production_dataset(base_dir, dataset_name="malaria", target_size=(
     )
     
     production_ds = production_ds.map(process_batch, num_parallel_calls=tf.data.AUTOTUNE)
+    # Use parent directory to avoid cluttering the raw data directory with cache files
+    production_ds = production_ds.cache(os.path.join(base_dir, "data", f"{dataset_name}_prod_cache"))
     production_ds = production_ds.map(train_augment, num_parallel_calls=tf.data.AUTOTUNE)
     production_ds = production_ds.prefetch(tf.data.AUTOTUNE)
     
