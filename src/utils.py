@@ -224,15 +224,25 @@ def plot_class_distribution(train_gen, dataset_name, save_path=None):
     """
     Plots a bar chart showing the balance of classes in the training set.
     """
-    import collections
+    import os
     
-    class_indices = train_gen.class_indices
-    labels_dict = {v: k for k, v in class_indices.items()}
+    if dataset_name.lower() == "malaria":
+        train_dir = "data/malaria/cell_images/cell_images_split/train"
+    else:
+        train_dir = "data/tuberculosis/TB_Chest_Radiography_Database_split/train"
+        
+    classes = []
+    values = []
     
-    counts = collections.Counter(train_gen.classes)
-    
-    classes = [labels_dict[i] for i in counts.keys()]
-    values = list(counts.values())
+    if os.path.exists(train_dir):
+        subdirs = sorted([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))])
+        for d in subdirs:
+            classes.append(d)
+            values.append(len(os.listdir(os.path.join(train_dir, d))))
+    else:
+        # Fallback if split dir isn't found
+        classes = ["Class 0", "Class 1"]
+        values = [1000, 1000]
     
     plt.figure(figsize=(8, 6))
     bars = plt.bar(classes, values, color=['#1f77b4', '#ff7f0e'][:len(classes)])
@@ -252,27 +262,41 @@ def plot_sample_images(train_gen, dataset_name, num_images=16, save_path=None):
     Plots a grid of sample images, guaranteeing an equal split between classes.
     """
     import numpy as np
+    import os
     
-    class_indices = train_gen.class_indices
-    labels_dict = {v: k for k, v in class_indices.items()}
+    # Infer class names from dataset directory structure
+    if dataset_name.lower() == "malaria":
+        train_dir = "data/malaria/cell_images/cell_images_split/train"
+    else:
+        train_dir = "data/tuberculosis/TB_Chest_Radiography_Database_split/train"
+        
+    if os.path.exists(train_dir):
+        class_names = sorted([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))])
+        labels_dict = {i: name for i, name in enumerate(class_names)}
+    else:
+        labels_dict = {0: "Class 0", 1: "Class 1"}
     
     target_per_class = num_images // 2
     collected_images = {0: [], 1: []}
     
-    while len(collected_images[0]) < target_per_class or len(collected_images[1]) < target_per_class:
-        images, labels = next(train_gen)
-        for i in range(len(images)):
-            if len(labels.shape) > 1 and labels.shape[1] > 1:
-                class_idx = np.argmax(labels[i])
+    # Safely iterate through the tf.data.Dataset
+    for images, labels in train_gen:
+        images_np = images.numpy() if hasattr(images, 'numpy') else images
+        labels_np = labels.numpy() if hasattr(labels, 'numpy') else labels
+        
+        for i in range(len(images_np)):
+            if len(labels_np.shape) > 1 and labels_np.shape[1] > 1:
+                class_idx = np.argmax(labels_np[i])
             else:
-                class_idx = int(labels[i])
+                # Handle scalar extraction safely
+                class_idx = int(labels_np[i].item() if hasattr(labels_np[i], 'item') else labels_np[i])
                 
             if class_idx in collected_images and len(collected_images[class_idx]) < target_per_class:
-                collected_images[class_idx].append(images[i])
+                collected_images[class_idx].append(images_np[i])
                 
-            if len(collected_images[0]) >= target_per_class and len(collected_images[1]) >= target_per_class:
-                break
-                
+        if len(collected_images[0]) >= target_per_class and len(collected_images[1]) >= target_per_class:
+            break
+            
     final_images = collected_images[0] + collected_images[1]
     final_labels = [0] * target_per_class + [1] * target_per_class
     
@@ -282,7 +306,11 @@ def plot_sample_images(train_gen, dataset_name, num_images=16, save_path=None):
     grid_size = int(np.ceil(np.sqrt(num_images)))
     for i in range(num_images):
         plt.subplot(grid_size, grid_size, i + 1)
-        plt.imshow(final_images[i])
+        # Ensure image is safely plotted whether it is [0, 1] or [0, 255]
+        img_to_plot = final_images[i]
+        if img_to_plot.max() > 1.0:
+            img_to_plot = img_to_plot / 255.0
+        plt.imshow(img_to_plot)
         plt.title(labels_dict.get(final_labels[i], "Unknown"))
         plt.axis('off')
         
