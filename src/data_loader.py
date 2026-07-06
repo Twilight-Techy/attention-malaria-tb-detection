@@ -10,20 +10,25 @@ def advanced_preprocessing(img):
     Applies Histogram Equalization (CLAHE) and Noise Reduction (Gaussian Blur) 
     as specified in the project report.
     """
+    # Ensure image is in uint8 format for OpenCV processing
     if img.dtype != np.uint8:
         img_uint8 = np.clip(img, 0, 255).astype(np.uint8)
     else:
         img_uint8 = img
 
+    # Convert to LAB color space to apply CLAHE to the L channel
     lab = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2LAB)
     l_channel, a, b = cv2.split(lab)
     
+    # Apply CLAHE
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     cl = clahe.apply(l_channel)
     
+    # Merge and convert back to RGB
     merged = cv2.merge((cl, a, b))
     enhanced_img = cv2.cvtColor(merged, cv2.COLOR_LAB2RGB)
     
+    # Apply Noise Reduction (Gaussian Blur)
     denoised_img = cv2.GaussianBlur(enhanced_img, (3, 3), 0)
     
     return denoised_img.astype(np.float32)
@@ -60,7 +65,8 @@ def train_augment(images, labels):
 
 def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     """
-    Physically splits the data and creates extremely fast tf.data pipelines.
+    Physically splits the data into Train (70%), Validation (15%), and Test (15%) subsets.
+    Then creates highly optimized tf.data pipelines for each split.
     """
     output_dir = data_dir + "_split"
     
@@ -116,10 +122,16 @@ def load_malaria_data(base_dir, batch_size=32):
     return create_data_generators(data_dir, batch_size=batch_size)
 
 def load_tb_data(base_dir, batch_size=32):
+    # Note: the TB dataset structure from Kaggle might vary. 
+    # Update the inner path depending on how it unzips.
     data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
     return create_data_generators(data_dir, batch_size=batch_size)
 
 def load_full_production_dataset(base_dir, dataset_name="malaria", target_size=(224, 224), batch_size=32):
+    """
+    Loads 100% of the raw images into a single training generator (no validation/test split).
+    Used EXCLUSIVELY for final production deployment model training.
+    """
     if dataset_name == "malaria":
         data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
     else:
