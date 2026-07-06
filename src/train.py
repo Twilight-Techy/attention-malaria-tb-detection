@@ -58,9 +58,7 @@ def train_model(model, train_data, val_data, epochs=20, model_path='best_model.h
         train_data,
         validation_data=val_data,
         epochs=epochs,
-        callbacks=callbacks,
-        workers=4,
-        use_multiprocessing=False
+        callbacks=callbacks
     )
     
     # GUARANTEE: Force Keras to load the mathematically perfect weights from disk, 
@@ -106,9 +104,7 @@ def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, ep
         validation_data=val_data,
         initial_epoch=initial_epoch,
         epochs=initial_epoch + epochs,
-        callbacks=callbacks,
-        workers=4,
-        use_multiprocessing=False
+        callbacks=callbacks
     )
     
     # GUARANTEE: Load the best weights from disk back into RAM
