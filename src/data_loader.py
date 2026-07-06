@@ -56,7 +56,7 @@ data_augmentation = tf.keras.Sequential([
     layers.RandomRotation(15/360),
     layers.RandomZoom(height_factor=(-0.1, 0.1), width_factor=(-0.1, 0.1)),
     layers.RandomTranslation(height_factor=0.05, width_factor=0.05),
-    layers.RandomBrightness(factor=0.2),
+    layers.RandomBrightness(factor=0.2, value_range=(0.0, 1.0)),
 ])
 
 def train_augment(images, labels):
