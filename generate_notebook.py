@@ -70,8 +70,7 @@ subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", "requ
 
 # 2. Setup Kaggle Credentials
 print("\\nAuthenticating with Kaggle...")
-if 'KAGGLE_USERNAME' not in os.environ:
-    os.environ['KAGGLE_USERNAME'] = input("Please enter your Kaggle Username (e.g. johndoe): ")
+os.environ['KAGGLE_USERNAME'] = 'imaksdaking'
 os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56' # Hardcoded API Key provided by user
 
 # 3. Setup Python Path
