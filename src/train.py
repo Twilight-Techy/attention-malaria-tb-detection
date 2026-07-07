@@ -86,9 +86,9 @@ def unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=10, ep
     backup_name = model_path if model_path else model.name
     initial_acc = get_best_metric_from_csv(csv_log_path, 'val_accuracy', 'max')
     
-    callbacks = [
-        tf.keras.callbacks.BackupAndRestore(backup_dir=f"backup_phase2_{backup_name}")
-    ]
+    # Remove BackupAndRestore for Phase 2 to prevent Keras from overriding initial_epoch
+    # Phase 2 is short and safely falls back to the Phase 1 checkpoint if interrupted.
+    callbacks = []
     
     if model_path:
         if initial_acc is not None:
