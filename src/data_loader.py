@@ -63,13 +63,11 @@ def train_augment(images, labels):
     images = data_augmentation(images, training=True)
     return images, labels
 
-def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
+def create_data_generators(data_dir, output_dir, target_size=(224, 224), batch_size=32):
     """
     Physically splits the data into Train (70%), Validation (15%), and Test (15%) subsets.
     Then creates highly optimized tf.data pipelines for each split.
     """
-    output_dir = data_dir + "_split"
-    
     if not os.path.exists(output_dir):
         print(f"Splitting dataset into Train/Val/Test subsets in {output_dir}...")
         splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=(0.7, 0.15, 0.15), group_prefix=None)
@@ -120,25 +118,30 @@ def create_data_generators(data_dir, target_size=(224, 224), batch_size=32):
     
     return train_ds, val_ds, test_ds
 
-def load_malaria_data(base_dir, batch_size=32):
-    data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
-    return create_data_generators(data_dir, batch_size=batch_size)
+def load_malaria_data(base_dir, data_dir=None, batch_size=32):
+    if data_dir is None:
+        data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
+    output_dir = os.path.join(base_dir, "data", "malaria_split")
+    return create_data_generators(data_dir, output_dir, batch_size=batch_size)
 
-def load_tb_data(base_dir, batch_size=32):
+def load_tb_data(base_dir, data_dir=None, batch_size=32):
     # Note: the TB dataset structure from Kaggle might vary. 
-    # Update the inner path depending on how it unzips.
-    data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
-    return create_data_generators(data_dir, batch_size=batch_size)
+    # Update the inner path depending on how it unzips or mounts.
+    if data_dir is None:
+        data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
+    output_dir = os.path.join(base_dir, "data", "tb_split")
+    return create_data_generators(data_dir, output_dir, batch_size=batch_size)
 
-def load_full_production_dataset(base_dir, dataset_name="malaria", target_size=(224, 224), batch_size=32):
+def load_full_production_dataset(base_dir, data_dir=None, dataset_name="malaria", target_size=(224, 224), batch_size=32):
     """
     Loads 100% of the raw images into a single training generator (no validation/test split).
     Used EXCLUSIVELY for final production deployment model training.
     """
-    if dataset_name == "malaria":
-        data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
-    else:
-        data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
+    if data_dir is None:
+        if dataset_name == "malaria":
+            data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
+        else:
+            data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
         
     print(f"Loading 100% of {dataset_name} data for Final Production Deployment from {data_dir}...")
     
