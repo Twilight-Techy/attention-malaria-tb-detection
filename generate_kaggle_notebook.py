@@ -104,13 +104,17 @@ for dataset_name in datasets_to_run:
     # 1. Load Data (Loads directly from Kaggle Input to NVMe Cache!)
     if dataset_name == "malaria":
         # Adjust this path if the dataset is mounted differently in Kaggle
-        kaggle_malaria_path = '/kaggle/input/cell-images-for-detecting-malaria/cell_images/cell_images'
+        kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria/cell_images/cell_images'
         if not os.path.exists(kaggle_malaria_path):
-            kaggle_malaria_path = '/kaggle/input/cell-images-for-detecting-malaria/cell_images'
+            kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria/cell_images'
+            if not os.path.exists(kaggle_malaria_path):
+                kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria'
         train_data, val_data, test_data = load_malaria_data(base_dir, data_dir=kaggle_malaria_path, batch_size=32)
     else:
         # Adjust this path if the dataset is mounted differently in Kaggle
-        kaggle_tb_path = '/kaggle/input/tuberculosis-tb-chest-xray-dataset/TB_Chest_Radiography_Database'
+        kaggle_tb_path = '/kaggle/input/datasets/tawsifurrahman/tuberculosis-tb-chest-xray-dataset/TB_Chest_Radiography_Database'
+        if not os.path.exists(kaggle_tb_path):
+            kaggle_tb_path = '/kaggle/input/datasets/tawsifurrahman/tuberculosis-tb-chest-xray-dataset'
         train_data, val_data, test_data = load_tb_data(base_dir, data_dir=kaggle_tb_path, batch_size=32)
         
     # 1.5. Exploratory Data Analysis
@@ -209,9 +213,11 @@ print(f"\\n{'='*50}\\nSTARTING PRODUCTION DEPLOYMENT PIPELINE FOR: {deployment_d
 
 # 1. Load 100% of data (NO SPLITS)
 # Adjust this path if the dataset is mounted differently in Kaggle
-kaggle_malaria_path = '/kaggle/input/cell-images-for-detecting-malaria/cell_images/cell_images'
+kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria/cell_images/cell_images'
 if not os.path.exists(kaggle_malaria_path):
-    kaggle_malaria_path = '/kaggle/input/cell-images-for-detecting-malaria/cell_images'
+    kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria/cell_images'
+    if not os.path.exists(kaggle_malaria_path):
+        kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria'
     
 production_data = load_full_production_dataset(base_dir, data_dir=kaggle_malaria_path, dataset_name=deployment_dataset, batch_size=32)
 
