@@ -19,6 +19,33 @@ title_cell = nbf.v4.new_markdown_cell("""# Automated End-to-End Deep Learning Fr
 This notebook is specifically tailored for the **Kaggle Notebook** environment. It utilizes Kaggle's native dataset attachment feature for instantaneous data loading (zero download time) and leverages the `/kaggle/working/` directory for persistent artifact storage.
 """)
 
+recovery_cell = nbf.v4.new_code_cell("""# =========================================================================
+# FAULT RECOVERY - DOWNLOAD PREVIOUS WEIGHTS DIRECTLY VIA KAGGLE API
+# =========================================================================
+import os
+import subprocess
+
+# Authenticate Kaggle API securely
+os.environ['KAGGLE_USERNAME'] = 'imaksdaking'
+os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56'
+
+# Kaggle must be imported AFTER setting the environment variables
+import kaggle
+
+print("Downloading Version 2 weights directly via Kaggle Python API...")
+os.makedirs('/kaggle/working/Thesis_Results', exist_ok=True)
+
+# Using the underlying API call to fetch a specific version by its scriptVersionId
+kaggle.api.kernels_output_with_http_info(
+    'imaksdaking/kaggle-main',
+    path='/kaggle/working/Thesis_Results/',
+    script_version_id=333930021
+)
+
+print("\\nVersion 2 weights downloaded successfully! Here are the contents:")
+print(subprocess.check_output('ls -lh /kaggle/working/Thesis_Results', shell=True).decode('utf-8'))
+""")
+
 kaggle_setup_cell = nbf.v4.new_code_cell("""# =========================================================================
 # 1. KAGGLE ENVIRONMENT SETUP & GITHUB CLONE
 # =========================================================================
@@ -258,7 +285,7 @@ print(f"\\nSUCCESS! Final deployment model saved to: {final_save_path}")
 '''
 """)
 
-nb.cells = [title_cell, kaggle_setup_cell, setup_cell, loop_cell_md, loop_cell_code, production_md, production_code]
+nb.cells = [title_cell, recovery_cell, kaggle_setup_cell, setup_cell, loop_cell_md, loop_cell_code, production_md, production_code]
 
 with open('kaggle_main.ipynb', 'w') as f:
     nbf.write(nb, f)
