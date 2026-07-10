@@ -28,10 +28,6 @@ kaggle_setup_cell = nbf.v4.new_code_cell("""# ==================================
 
 import os
 
-# CRITICAL: Force Kaggle to use Keras 2 (tf.keras) to support legacy Lambda layers!
-# This prevents the NotImplementedError about inferring Lambda output shapes in Keras 3.
-os.environ['TF_USE_LEGACY_KERAS'] = '1'
-
 print("Setting up Kaggle Workspace...")
 
 # Kaggle's writable directory
@@ -152,7 +148,7 @@ for dataset_name in datasets_to_run:
         model = model_builder()
         model = compile_model(model, learning_rate=1e-4)
         save_path = f"best_{dataset_name}_{model.name}.h5"
-        models_dict[model_name] = save_path
+        models_dict[model_name] = (save_path, model_builder)
         
         # FAULT TOLERANCE: Skip if completely finished previously
         completion_marker = f"{save_path}.done"

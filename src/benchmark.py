@@ -51,13 +51,14 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
     from attention import cbam_block, channel_attention, spatial_attention
     custom_objects = {'cbam_block': cbam_block, 'channel_attention': channel_attention, 'spatial_attention': spatial_attention}
 
-    for model_name, model_path in models_dict.items():
+    for model_name, (model_path, model_builder) in models_dict.items():
         if not os.path.exists(model_path):
             print(f"Skipping {model_name}: Model file '{model_path}' not found.")
             continue
             
         print(f"\n--- Evaluating {model_name} ---")
-        model = tf.keras.models.load_model(model_path, custom_objects=custom_objects)
+        model = model_builder()
+        model.load_weights(model_path)
         
         param_count = model.count_params()
         size_mb = get_model_size_mb(model_path)
