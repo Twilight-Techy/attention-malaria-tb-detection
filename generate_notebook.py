@@ -62,11 +62,13 @@ import subprocess
 import tensorflow.keras.backend as K
 import getpass
 import pandas as pd
+import importlib
 from IPython.display import display
 
 # 1. Install Dependencies
 print("Installing dependencies...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"])
+importlib.invalidate_caches()
 
 # 2. Setup Kaggle Credentials
 print("\\nAuthenticating with Kaggle...")
@@ -74,16 +76,14 @@ os.environ['KAGGLE_USERNAME'] = 'imaksdaking'
 os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56' # Hardcoded API Key provided by user
 
 # 3. Setup Python Path
-sys.path.append(os.path.abspath('src'))
+# Use insert(0) to prevent any pre-installed packages (like 'benchmark') from shadowing our local files!
+sys.path.insert(0, os.path.abspath('src'))
 
-try:
-    from data_loader import load_malaria_data, load_tb_data, load_full_production_dataset
-    from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
-    from train import compile_model, train_model, unfreeze_and_finetune
-    from utils import plot_training_history, plot_comparative_roc, plot_comparative_bar_chart
-    from benchmark import evaluate_all_models
-except ImportError:
-    print("Dependencies installed. Please restart the Jupyter kernel and run this cell again.")
+from data_loader import load_malaria_data, load_tb_data, load_full_production_dataset
+from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
+from train import compile_model, train_model, unfreeze_and_finetune
+from utils import plot_training_history, plot_comparative_roc, plot_comparative_bar_chart
+from benchmark import evaluate_all_models
 """)
 
 data_cell = nbf.v4.new_code_cell("""# Download both datasets to the local VM disk
