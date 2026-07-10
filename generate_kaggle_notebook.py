@@ -52,11 +52,9 @@ get_ipython().run_line_magic('cd', repo_name)
 os.makedirs(results_dir, exist_ok=True)
 
 # Auto-recover weights and logs from any mounted previous Kaggle versions
-print("Scanning /kaggle/input for previous training weights and logs...")
-get_ipython().system(f'find /kaggle/input -name "*.h5" -exec cp {{}} {results_dir}/ \\\\; 2>/dev/null')
-get_ipython().system(f'find /kaggle/input -name "*.done" -exec cp {{}} {results_dir}/ \\\\; 2>/dev/null')
-get_ipython().system(f'find /kaggle/input -name "*.phase1_done" -exec cp {{}} {results_dir}/ \\\\; 2>/dev/null')
-get_ipython().system(f'find /kaggle/input -name "*.csv" -exec cp {{}} {results_dir}/ \\\\; 2>/dev/null')
+print("Restoring previous training weights and logs from my-thesis-weights-v2 dataset...")
+get_ipython().system(f'cp -rn /kaggle/input/my-thesis-weights-v2/Thesis_Results/* {results_dir}/ 2>/dev/null || true')
+get_ipython().system(f'cp -rn /kaggle/input/my-thesis-weights-v2/* {results_dir}/ 2>/dev/null || true')
 
 print("\\nRecovered files in Thesis_Results:")
 get_ipython().system(f'ls -lh {results_dir}')
