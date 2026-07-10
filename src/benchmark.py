@@ -57,7 +57,7 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
             continue
             
         print(f"\n--- Evaluating {model_name} ---")
-        model = tf.keras.models.load_model(model_path, custom_objects=custom_objects, safe_mode=False)
+        model = tf.keras.models.load_model(model_path, custom_objects=custom_objects)
         
         param_count = model.count_params()
         size_mb = get_model_size_mb(model_path)

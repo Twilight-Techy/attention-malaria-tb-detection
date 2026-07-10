@@ -28,6 +28,10 @@ kaggle_setup_cell = nbf.v4.new_code_cell("""# ==================================
 
 import os
 
+# CRITICAL: Force Kaggle to use Keras 2 (tf.keras) to support legacy Lambda layers!
+# This prevents the NotImplementedError about inferring Lambda output shapes in Keras 3.
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
+
 print("Setting up Kaggle Workspace...")
 
 # Kaggle's writable directory
