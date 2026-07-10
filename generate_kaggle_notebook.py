@@ -53,7 +53,13 @@ os.makedirs(results_dir, exist_ok=True)
 
 # Auto-recover weights and logs from any mounted previous Kaggle versions
 print("Scanning /kaggle/input for previous training weights and logs...")
-get_ipython().system(f'find /kaggle/input -type f \\( -name "*.h5" -o -name "*.done" -o -name "*.phase1_done" -o -name "*.csv" \\) -exec cp {{}} {results_dir}/ \\; 2>/dev/null')
+get_ipython().system(f'find /kaggle/input -name "*.h5" -exec cp {{}} {results_dir}/ \\; 2>/dev/null')
+get_ipython().system(f'find /kaggle/input -name "*.done" -exec cp {{}} {results_dir}/ \\; 2>/dev/null')
+get_ipython().system(f'find /kaggle/input -name "*.phase1_done" -exec cp {{}} {results_dir}/ \\; 2>/dev/null')
+get_ipython().system(f'find /kaggle/input -name "*.csv" -exec cp {{}} {results_dir}/ \\; 2>/dev/null')
+
+print("\\nRecovered files in Thesis_Results:")
+get_ipython().system(f'ls -lh {results_dir}')
 
 # Copy previously trained weights from Thesis_Results into the repo folder for Keras to resume
 get_ipython().system(f'cp -r {results_dir}/* . 2>/dev/null || true')
