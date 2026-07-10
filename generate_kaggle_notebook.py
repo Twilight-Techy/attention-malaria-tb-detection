@@ -39,9 +39,11 @@ results_dir = os.path.join(working_dir, 'Thesis_Results')
 # Move into working directory
 get_ipython().run_line_magic('cd', working_dir)
 
-# Clone repository if it doesn't exist
+# Clone repository if it doesn't exist, otherwise pull latest changes
 if not os.path.exists(repo_name):
     get_ipython().system('git clone https://github.com/Twilight-Techy/attention-malaria-tb-detection.git')
+else:
+    get_ipython().system('cd attention-malaria-tb-detection && git pull')
 
 # Move into the repository
 get_ipython().run_line_magic('cd', repo_name)

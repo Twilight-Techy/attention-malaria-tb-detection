@@ -34,10 +34,12 @@ try:
     print("Google Colab environment detected. Mounting Drive...")
     drive.mount('/content/drive')
     
-    # Clone the repository if not already present to ensure src/ exists
+    # Clone the repository if not already present to ensure src/ exists, otherwise pull changes
     get_ipython().run_line_magic('cd', '/content')
     if not os.path.exists('attention-malaria-tb-detection'):
         get_ipython().system('git clone https://github.com/Twilight-Techy/attention-malaria-tb-detection.git')
+    else:
+        get_ipython().system('cd attention-malaria-tb-detection && git pull')
     get_ipython().run_line_magic('cd', 'attention-malaria-tb-detection')
     
     # Auto-resume pulls
