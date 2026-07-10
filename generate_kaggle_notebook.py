@@ -51,11 +51,9 @@ get_ipython().run_line_magic('cd', repo_name)
 # Create persistent results folder
 os.makedirs(results_dir, exist_ok=True)
 
-# Auto-recover weights from previous Kaggle version if mounted
-prev_output_path = '/kaggle/input/notebooks/imaksdaking/kaggle-main'
-if os.path.exists(prev_output_path):
-    print(f"Found previous notebook output at {prev_output_path}. Recovering weights...")
-    get_ipython().system(f'cp -r {prev_output_path}/* {results_dir}/ 2>/dev/null || true')
+# Auto-recover weights and logs from any mounted previous Kaggle versions
+print("Scanning /kaggle/input for previous training weights and logs...")
+get_ipython().system(f'find /kaggle/input -type f \\( -name "*.h5" -o -name "*.done" -o -name "*.phase1_done" -o -name "*.csv" \\) -exec cp {{}} {results_dir}/ \\; 2>/dev/null')
 
 # Copy previously trained weights from Thesis_Results into the repo folder for Keras to resume
 get_ipython().system(f'cp -r {results_dir}/* . 2>/dev/null || true')
