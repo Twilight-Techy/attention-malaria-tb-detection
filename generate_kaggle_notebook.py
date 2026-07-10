@@ -53,14 +53,9 @@ os.makedirs(results_dir, exist_ok=True)
 
 # Auto-recover weights and logs from any mounted previous Kaggle versions
 print("Restoring previous training weights and logs, preserving exact folder structure...")
-import glob
-dataset_paths = glob.glob('/kaggle/input/**/Thesis_Results', recursive=True)
-if dataset_paths:
-    source_dir = dataset_paths[0]
-    print(f"Found previous results at {source_dir}, copying...")
-    get_ipython().system(f'cp -rn {source_dir}/* {results_dir}/ 2>/dev/null || true')
-else:
-    print("Could not find previous Thesis_Results dataset.")
+source_dir = '/kaggle/input/datasets/imaksdaking/my-thesis-weights-v2/Thesis_Results'
+print(f"Copying from {source_dir}...")
+get_ipython().system(f'cp -rn {source_dir}/* {results_dir}/ 2>/dev/null || true')
 
 print("\\nRecovered files in Thesis_Results:")
 get_ipython().system(f'ls -lh {results_dir}')
