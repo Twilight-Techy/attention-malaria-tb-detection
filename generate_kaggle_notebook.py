@@ -19,6 +19,22 @@ title_cell = nbf.v4.new_markdown_cell("""# Automated End-to-End Deep Learning Fr
 This notebook is specifically tailored for the **Kaggle Notebook** environment. It utilizes Kaggle's native dataset attachment feature for instantaneous data loading (zero download time) and leverages the `/kaggle/working/` directory for persistent artifact storage.
 """)
 
+recovery_cell = nbf.v4.new_code_cell("""# =========================================================================
+# FAULT RECOVERY - DOWNLOAD PREVIOUS WEIGHTS DIRECTLY VIA KAGGLE CLI
+# =========================================================================
+import os
+# Authenticate Kaggle CLI securely
+os.environ['KAGGLE_USERNAME'] = 'imaksdaking'
+os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56'
+
+# Upgrade kaggle CLI to unlock the -v flag
+get_ipython().system('pip install -q --upgrade kaggle')
+
+# Download the 17GB weights directly from Version 2!
+get_ipython().system('mkdir -p /kaggle/working/Thesis_Results')
+get_ipython().system('kaggle kernels output imaksdaking/kaggle-main -v 2 -p /kaggle/working/Thesis_Results/')
+""")
+
 kaggle_setup_cell = nbf.v4.new_code_cell("""# =========================================================================
 # 1. KAGGLE ENVIRONMENT SETUP & GITHUB CLONE
 # =========================================================================
@@ -258,7 +274,7 @@ print(f"\\nSUCCESS! Final deployment model saved to: {final_save_path}")
 '''
 """)
 
-nb.cells = [title_cell, kaggle_setup_cell, setup_cell, loop_cell_md, loop_cell_code, production_md, production_code]
+nb.cells = [title_cell, recovery_cell, kaggle_setup_cell, setup_cell, loop_cell_md, loop_cell_code, production_md, production_code]
 
 with open('kaggle_main.ipynb', 'w') as f:
     nbf.write(nb, f)
