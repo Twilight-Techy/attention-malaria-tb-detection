@@ -31,8 +31,12 @@ os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56'
 get_ipython().system('pip install -q --upgrade kaggle')
 
 # Download the 17GB weights directly from Version 2!
+print("Downloading Version 2 weights directly via Kaggle CLI...")
 get_ipython().system('mkdir -p /kaggle/working/Thesis_Results')
 get_ipython().system('kaggle kernels output imaksdaking/kaggle-main -v 2 -p /kaggle/working/Thesis_Results/')
+
+print("\\nVersion 2 weights downloaded successfully! Here are the contents:")
+get_ipython().system('ls -lh /kaggle/working/Thesis_Results')
 """)
 
 kaggle_setup_cell = nbf.v4.new_code_cell("""# =========================================================================
