@@ -2,7 +2,7 @@
 
 A deep learning framework for automated screening of **malaria** in blood smears and
 **tuberculosis** in chest X-rays, built around **CBAM** (Convolutional Block Attention Modules)
-and evaluated across five architectures — with the comparison run properly: matched training
+and evaluated across five architectures, with the comparison run properly: matched training
 conditions, statistical significance testing, and latency and size measurements for deployment
 on constrained hardware.
 
@@ -18,9 +18,9 @@ Attention modules are inserted into a convolutional backbone so the network lear
 *what* to weight before classifying. `cbam_block` applies channel attention followed by spatial
 attention:
 
-- **Channel attention** — average- and max-pooled descriptors pass through a shared bottleneck
+- **Channel attention**: average- and max-pooled descriptors pass through a shared bottleneck
   MLP (reduction ratio 8), are summed, and gate the channels through a sigmoid.
-- **Spatial attention** — the channel-pooled mean and max are concatenated and convolved with a
+- **Spatial attention**: the channel-pooled mean and max are concatenated and convolved with a
   7×7 kernel to produce a per-pixel gate.
 
 The same block drops into every architecture, which is what makes the comparison fair.
@@ -41,8 +41,8 @@ is the backbone.
 ## Preprocessing
 
 Medical images are not natural images, so the pipeline does more than resize and normalize.
-Each image is converted to **LAB** colour space, **CLAHE** is applied to the L channel only —
-which lifts local contrast in stained smears and X-rays without distorting colour — then a 3×3
+Each image is converted to **LAB** colour space, **CLAHE** is applied to the L channel only
+(which lifts local contrast in stained smears and X-rays without distorting colour), then a 3×3
 Gaussian blur suppresses acquisition noise before augmentation.
 
 ## Training
@@ -53,7 +53,7 @@ pretrained features:
 1. Train with the backbone frozen (`compile_model`, lr `1e-4`).
 2. `unfreeze_and_finetune` releases the top N layers and continues at lr `1e-5`.
 
-Early stopping, checkpointing, LR scheduling, and CSV logging throughout — the logs let a run
+Early stopping, checkpointing, LR scheduling, and CSV logging throughout; the logs let a run
 resume and are what the history plots are drawn from.
 
 ## Evaluation
@@ -64,7 +64,7 @@ This is where most comparative studies stop early. Here each model reports:
 - **Comparative ROC curves** and per-metric bar charts across all five models
 - **McNemar's test** between model pairs, so a claim that one architecture beats another is
   backed by a significance test rather than a decimal place
-- **Grad-CAM heatmaps** — for a clinical tool, seeing *where* the model looked matters as much
+- **Grad-CAM heatmaps**: for a clinical tool, seeing *where* the model looked matters as much
   as whether it was right
 - **Inference latency (ms/image) and on-disk model size**, since the target is deployment in
   resource-constrained settings where MobileNetV2 winning on cost may matter more than
@@ -76,7 +76,7 @@ This is where most comparative studies stop early. Here each model reports:
 
 ```
 src/
-  attention.py      CBAM — channel and spatial attention
+  attention.py      CBAM: channel and spatial attention
   models.py         the five architectures, one shared transfer builder
   data_loader.py    CLAHE/LAB preprocessing, denoising, augmentation, splits
   train.py          two-phase training, callbacks, CSV logging
