@@ -70,6 +70,31 @@ This is where most comparative studies stop early. Here each model reports:
   resource-constrained settings where MobileNetV2 winning on cost may matter more than
   DenseNet121 winning on F1
 
+### Splits and the `generated_results/` folder
+
+Every architecture is trained and tested on three Train:Test:Val splits of each dataset:
+**70:20:10**, **75:15:10** and **90:5:5** (5 models × 3 splits × 2 datasets = 30 runs). After each
+split is benchmarked, its test-set predictions are saved (`evaluation_<dataset>_<split>.npz`), so the
+run can resume across sessions. At the end, `src/results.py` builds the full deliverable:
+
+```
+generated_results/
+  Documentation_and_Reports/   all_metrics_results.csv, report_tables.md, detailed_classification_reports.txt,
+                               dataset_metadata.txt, summarized_report.md, student_defense_notes.md
+  Malaria/ and Tuberculosis/
+    Evaluation_Charts/Split_<split>/
+      Accuracy, Precision, Recall, F1-Score, AUC-ROC, AUC-PR/   bar chart, histogram, pie chart (+ ROC / PR curves)
+      Combined_Metrics/                                        box plot of all classification metrics
+      General_Performance/                                     confusion matrices, training history
+    Visuals_and_EDA/          class distribution, sample images, Grad-CAM attention map
+  training_logs/              per-epoch log for every model, dataset and split
+```
+
+The disease class (Parasitized / Tuberculosis) is the positive class throughout. Regression metrics
+are computed on the predicted disease probability. The datasets have no pixel masks, so the
+"segmentation" metrics (IoU, Dice, mAP, pixel accuracy) are computed per class at image level and
+averaged over the two classes.
+
 ---
 
 ## Layout
@@ -82,6 +107,7 @@ src/
   train.py          two-phase training, callbacks, CSV logging
   benchmark.py      comparative evaluation, latency, model size
   utils.py          metrics, ROC and bar charts, McNemar, Grad-CAM
+  results.py        builds generated_results/: charts, EDA, attention maps, logs, reports
   download_data.py  pulls the NIH malaria and TB datasets via the Kaggle API
 main.ipynb          orchestrates the pipeline
 kaggle_main.ipynb   Kaggle/Colab GPU variant
