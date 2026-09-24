@@ -74,10 +74,12 @@ print("Installing dependencies...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"])
 importlib.invalidate_caches()
 
-# 2. Setup Kaggle Credentials
+# 2. Setup Kaggle Credentials (entered at runtime, never stored in the notebook)
 print("\\nAuthenticating with Kaggle...")
-os.environ['KAGGLE_USERNAME'] = 'imaksdaking'
-os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56' # Hardcoded API Key provided by user
+if not os.environ.get('KAGGLE_USERNAME'):
+    os.environ['KAGGLE_USERNAME'] = input("Kaggle username: ").strip()
+if not os.environ.get('KAGGLE_KEY'):
+    os.environ['KAGGLE_KEY'] = getpass.getpass("Kaggle API key: ").strip()
 
 # 3. Setup Python Path
 # Use insert(0) to prevent any pre-installed packages (like 'benchmark') from shadowing our local files!
@@ -85,10 +87,10 @@ sys.path.insert(0, os.path.abspath('src'))
 
 from data_loader import load_malaria_data, load_tb_data, load_full_production_dataset
 from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
-from train import compile_model, train_model, unfreeze_and_finetune
+from train import compile_model, train_model, unfreeze_and_finetune, write_phase1_marker, read_phase1_epochs
 from utils import plot_training_history, plot_comparative_roc, plot_comparative_bar_chart
 from benchmark import evaluate_all_models
-from data_loader import cleanup_split
+from data_loader import cleanup_split, build_tb_source_dir
 from results import (MODEL_LAYER_NAMES, DATASET_INFO, checkpoint_path, training_log_path, comparative_csv_path,
                      evaluation_path, save_split_evaluation, generate_attention_map, generate_all_results)
 """)
@@ -118,6 +120,10 @@ architectures_to_run = [
 # Raw dataset locations (downloaded by src/download_data.py)
 malaria_data_path = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
 tb_data_path = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
+# The 2,800 TB images obtained from the NIAID TB portal under the data-sharing agreement.
+# They are merged into the Tuberculosis class (3,500 Normal + 700 public TB + 2,800 NIAID TB).
+niaid_tb_path = os.path.join(base_dir, "data", "tuberculosis", "NIAID_TB_Portal")  # Place the NIAID TB portal images here
+tb_data_path = build_tb_source_dir(base_dir, tb_data_path, niaid_tb_path)
 DATA_DIRS = {"malaria": malaria_data_path, "tb": tb_data_path}
 RESULTS_DIR = "generated_results"
 
@@ -178,15 +184,14 @@ for dataset_name in datasets_to_run:
             if not phase1_completed:
                 # Train (Base Layers Frozen)
                 print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
-                train_model(model, train_data, val_data, epochs=15, model_path=save_path, csv_log_path=log_path)
+                history = train_model(model, train_data, val_data, epochs=15, model_path=save_path, csv_log_path=log_path)
                 
-                # Mark Phase 1 as completely finished
-                with open(phase1_marker, 'w') as f:
-                    f.write("phase 1 complete")
+                # Mark Phase 1 as completely finished (records how many epochs it ran)
+                write_phase1_marker(phase1_marker, history)
             
-            # Fine-Tune (Unfreezing Top Layers)
+            # Fine-Tune (Unfreezing Top Layers), numbered straight after the last Phase 1 epoch
             print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
-            unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path, model_path=save_path, initial_epoch=15)
+            unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path, model_path=save_path, initial_epoch=read_phase1_epochs(phase1_marker))
             
             # Mark as completely finished
             with open(completion_marker, 'w') as f:

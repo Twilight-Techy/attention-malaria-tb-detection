@@ -116,6 +116,9 @@ def list_images(folder):
 # =========================================================================
 
 def save_split_evaluation(dataset_name, split, y_true, predictions_dict, out_dir='.'):
+    """
+    Stores the disease-positive labels and disease probabilities returned by benchmark.evaluate_all_models.
+    """
     arrays = {'y_true': np.asarray(y_true).astype(int).flatten()}
     for model_name, probs in predictions_dict.items():
         arrays[f"probs::{model_name}"] = np.asarray(probs, dtype=np.float32).flatten()
@@ -199,17 +202,16 @@ def collect_results(in_dir='.'):
     predictions = {}
     for dataset_name in DATASETS:
         for split in SPLITS:
-            y_true, preds = load_split_evaluation(dataset_name, split, in_dir)
-            if y_true is None:
+            y_pos, preds = load_split_evaluation(dataset_name, split, in_dir)
+            if y_pos is None:
                 print(f"[results] No evaluation found for {dataset_name} {split}; skipping.")
                 continue
             comp = load_computational_metrics(dataset_name, split, in_dir)
-            y_pos = None
             pos_preds = {}
             for model_name in MODELS:
                 if model_name not in preds:
                     continue
-                y_pos, p_pos = to_disease_positive(dataset_name, y_true, preds[model_name])
+                p_pos = preds[model_name].astype(np.float64)
                 pos_preds[model_name] = p_pos
                 row = {'Dataset': DATASET_INFO[dataset_name]['display'], 'Split': split_label(split), 'Model': model_name}
                 row.update(compute_all_metrics(y_pos, p_pos))
@@ -266,7 +268,12 @@ def plot_metric_pie_charts(df, dataset_name, split, output_dir):
         for metric in CLASSIFICATION_METRICS:
             file_metric = 'accuracy' if metric == 'Accuracy' else metric
             plt.figure(figsize=(8, 8))
-            plt.pie(subset[metric].clip(lower=0), labels=subset['Model'], autopct='%1.1f%%', startangle=140, colors=sns.color_palette("pastel"))
+            values = subset[metric].clip(lower=0)
+            if values.sum() > 0:
+                plt.pie(values, labels=subset['Model'], autopct='%1.1f%%', startangle=140, colors=sns.color_palette("pastel"))
+            else:
+                plt.text(0.5, 0.5, f'All models scored 0 on {metric}', ha='center', va='center')
+                plt.axis('off')
             plt.title(f'Relative {metric} Distribution Among Models - {display_name} ({split_label(split)})')
             plt.tight_layout()
             plt.savefig(os.path.join(_split_dir(output_dir, dataset_name, split, metric), f'piechart_{file_metric}_{display_name}_{split}.png'))
@@ -616,12 +623,19 @@ def write_classification_reports(predictions, docs_dir):
                         f.write(f"{avg:<15} {r['precision']:>10.2f} {r['recall']:>10.2f} {r['f1-score']:>10.2f} {total:>10}\n")
                     f.write("\n" + "=" * 65 + "\n\n")
 
+PUBLIC_TB_IMAGES = 700  # TB images in the public Kaggle release; the rest come from the NIAID TB portal
+
+def _tb_composition(counts):
+    niaid = max(counts['disease'] - PUBLIC_TB_IMAGES, 0)
+    if niaid:
+        return (f"{counts['disease']:,} TB-Infected which consists of {PUBLIC_TB_IMAGES:,} publicly accessible images "
+                f"and {niaid:,} images sourced from the NIAID TB portal by agreement")
+    return f"{counts['disease']:,} TB-Infected"
+
 def _tb_description(counts):
     total = counts['disease'] + counts['healthy']
     return (f"Contains comprehensive collections of normal and TB-infected chest X-ray images. "
-            f"Total Images: {total:,} ({counts['healthy']:,} Normal, and {counts['disease']:,} TB-Infected). "
-            f"According to the Kaggle data card, a further 2,800 TB images are available from the NIAID TB portal "
-            f"only under a data-sharing agreement and are not part of the downloadable dataset.")
+            f"Total Images: {total:,} ({counts['healthy']:,} Normal, and {_tb_composition(counts)}).")
 
 def write_dataset_metadata(data_dirs, docs_dir):
     m = count_classes(data_dirs['malaria'], 'malaria') if data_dirs.get('malaria') else {'disease': 0, 'healthy': 0}
@@ -704,7 +718,7 @@ To ensure rigorous validation and to test the robustness of the deep learning fr
 
 The models were evaluated using two primary imaging datasets:
 *   **Malaria Dataset (Blood Smears):** {m_total:,} total images, {m_balance} ({m['disease']:,} Parasitized and {m['healthy']:,} Uninfected). Accessed on 11 July 2026.
-*   **Tuberculosis Dataset (Chest X-Rays):** {t_total:,} total images, {t_balance} ({t['healthy']:,} Normal and {t['disease']:,} TB-Infected). According to the Kaggle data card, a further 2,800 TB images are held by the NIAID TB portal under a data-sharing agreement and are not included in the downloadable dataset. Accessed on 11 July 2026.
+*   **Tuberculosis Dataset (Chest X-Rays):** {t_total:,} total images, {t_balance} ({t['healthy']:,} Normal and {_tb_composition(t)}). Accessed on 11 July 2026.
 
 ## 4. Evaluation Metrics
 
@@ -750,7 +764,7 @@ Instead of evaluating a single Yes/No prediction at a fixed 50% confidence thres
 *   **AUC-ROC (Area Under the Receiver Operating Characteristic Curve):**
     *   *Explanation:* The script plots the True Positive Rate against the False Positive Rate at every threshold. The Area Under the Curve (AUC) summarizes the model's overall ability to distinguish between the diseased and healthy classes, regardless of what threshold you pick.
 *   **AUC-PR (Area Under the Precision-Recall Curve):**
-    *   *Explanation:* Similar to ROC, but it plots Precision against Recall (computed as the average precision). This is particularly useful for evaluating performance when one class might be more important or if there are class imbalances, as in the TB dataset. The dashed baseline on the PR curve is the proportion of diseased images in the test set.
+    *   *Explanation:* Similar to ROC, but it plots Precision against Recall (computed as the average precision). This is particularly useful for evaluating performance when one class might be more important or if there are slight imbalances. The dashed baseline on the PR curve is the proportion of diseased images in the test set.
 
 ## 3. Regression / Error Metrics (MAE, MSE, RMSE, MAPE, R-Squared)
 

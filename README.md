@@ -90,7 +90,12 @@ generated_results/
   training_logs/              per-epoch log for every model, dataset and split
 ```
 
-The disease class (Parasitized / Tuberculosis) is the positive class throughout. Regression metrics
+The TB dataset combines the public Kaggle release (3,500 Normal, 700 TB) with the 2,800 TB images
+from the NIAID TB portal obtained under agreement (`build_tb_source_dir`), giving 3,500 images per
+class. Point `niaid_tb_path` in the notebook at the folder holding those images.
+
+The disease class (Parasitized / Tuberculosis) is the positive class throughout, including the
+per-split `comparative_results_*.csv` written by the benchmark. Regression metrics
 are computed on the predicted disease probability. The datasets have no pixel masks, so the
 "segmentation" metrics (IoU, Dice, mAP, pixel accuracy) are computed per class at image level and
 averaged over the two classes.
@@ -118,7 +123,7 @@ kaggle_main.ipynb   Kaggle/Colab GPU variant
 ```bash
 pip install -r requirements.txt
 
-# Kaggle API token at ~/.kaggle/kaggle.json
+# Kaggle API token at ~/.kaggle/kaggle.json (main.ipynb asks for the username and key if they are not set)
 python src/download_data.py
 ```
 

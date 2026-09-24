@@ -18,6 +18,29 @@ def get_best_metric_from_csv(csv_path, metric='val_accuracy', mode='max'):
         pass
     return None
 
+def write_phase1_marker(marker_path, history):
+    """
+    Marks Phase 1 as finished and records how many epochs it actually ran
+    (EarlyStopping can end it before the epoch budget).
+    """
+    epochs_run = history.epoch[-1] + 1 if history is not None and history.epoch else None
+    with open(marker_path, 'w') as f:
+        f.write(f"phase 1 complete\nepochs={epochs_run}\n" if epochs_run else "phase 1 complete\n")
+
+def read_phase1_epochs(marker_path, default=15):
+    """
+    Number of epochs Phase 1 ran, used as Phase 2's initial_epoch so the epoch numbering
+    continues without a gap. Falls back to the Phase 1 budget for markers written without it.
+    """
+    try:
+        with open(marker_path) as f:
+            for line in f:
+                if line.startswith("epochs="):
+                    return int(line.split("=", 1)[1])
+    except (OSError, ValueError):
+        pass
+    return default
+
 def compile_model(model, learning_rate=1e-4):
     """
     Compile the model with Adam optimizer and binary crossentropy.

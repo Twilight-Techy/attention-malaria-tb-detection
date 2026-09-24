@@ -144,6 +144,39 @@ def cleanup_split(base_dir, dataset_name, split):
     if os.path.exists(split_dir):
         shutil.rmtree(split_dir, ignore_errors=True)
 
+def build_tb_source_dir(base_dir, tb_data_dir, niaid_tb_dir=None):
+    """
+    Combines the public Kaggle TB database (Normal + 700 Tuberculosis images) with the 2,800
+    NIAID TB portal images obtained under the data-sharing agreement, so the TB dataset holds
+    3,500 Normal and 3,500 Tuberculosis images. Files are symlinked (splitfolders copies the
+    real file contents), so nothing is duplicated on disk.
+    Returns the directory to split, or tb_data_dir unchanged when no NIAID folder is available.
+    """
+    if not niaid_tb_dir or not os.path.isdir(niaid_tb_dir):
+        if niaid_tb_dir:
+            print(f"NIAID TB folder {niaid_tb_dir} not found; using the public TB images only.")
+        return tb_data_dir
+
+    combined_dir = os.path.join(base_dir, "data", "tb_combined")
+    image_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tif', '.tiff')
+    sources = [
+        ("Normal", os.path.join(tb_data_dir, "Normal"), ""),
+        ("Tuberculosis", os.path.join(tb_data_dir, "Tuberculosis"), ""),
+        ("Tuberculosis", niaid_tb_dir, "NIAID-"),
+    ]
+    for class_name, src_dir, prefix in sources:
+        dst_dir = os.path.join(combined_dir, class_name)
+        os.makedirs(dst_dir, exist_ok=True)
+        for fname in os.listdir(src_dir):
+            if not fname.lower().endswith(image_exts):
+                continue
+            dst = os.path.join(dst_dir, prefix + fname)
+            if not os.path.exists(dst):
+                os.symlink(os.path.abspath(os.path.join(src_dir, fname)), dst)
+    counts = {c: len(os.listdir(os.path.join(combined_dir, c))) for c in ("Normal", "Tuberculosis")}
+    print(f"Combined TB dataset at {combined_dir}: {counts}")
+    return combined_dir
+
 def load_malaria_data(base_dir, data_dir=None, batch_size=32, split=None):
     if data_dir is None:
         data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
