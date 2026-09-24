@@ -1,3 +1,4 @@
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -37,7 +38,6 @@ def plot_training_history_from_csv(csv_path, title="Training History"):
     Reads a CSV log file and plots the training and validation loss/accuracy.
     """
     import pandas as pd
-    import os
     
     if not os.path.exists(csv_path):
         print(f"Log file {csv_path} not found.")
@@ -156,8 +156,8 @@ def plot_training_history(history, model_name="Model"):
     ax1.legend()
     
     # Loss plot
-    ax1.plot(history.history['loss'], label='Train Loss')
-    ax1.plot(history.history['val_loss'], label='Validation Loss')
+    ax2.plot(history.history['loss'], label='Train Loss')
+    ax2.plot(history.history['val_loss'], label='Validation Loss')
     ax2.set_title(f'{model_name} Loss')
     ax2.set_xlabel('Epochs')
     ax2.set_ylabel('Loss')
@@ -172,21 +172,26 @@ def get_img_array(img_path, size=(224, 224)):
     array = np.expand_dims(array, axis=0)
     return array / 255.0
 
-def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
+def make_gradcam_heatmap(img_array, model, last_conv_layer_name=None, pred_index=None):
     """
-    Generates Grad-CAM heatmap for a given image array and model.
+    Generates a Grad-CAM heatmap for a single-sigmoid-output model.
+    last_conv_layer_name: layer to explain; defaults to the last spatial (CBAM-refined) feature map.
+    pred_index: 1 explains the sigmoid output (label 1), 0 explains its complement (label 0);
+                defaults to the predicted label.
     """
-    # Create a model that maps the input image to the activations
-    # of the last conv layer as well as the output predictions
-    grad_model = tf.keras.models.Model(
-        [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
-    )
+    if last_conv_layer_name is None:
+        from results import _find_attention_layer
+        target_layer = _find_attention_layer(model)
+    else:
+        target_layer = model.get_layer(last_conv_layer_name)
+    grad_model = tf.keras.models.Model(model.input, [target_layer.output, model.output])
 
     with tf.GradientTape() as tape:
-        last_conv_layer_output, preds = grad_model(img_array)
+        last_conv_layer_output, preds = grad_model(img_array, training=False)
+        preds = tf.reshape(preds, [-1])
         if pred_index is None:
-            pred_index = tf.argmax(preds[0])
-        class_channel = preds[:, pred_index]
+            pred_index = int(float(preds[0]) >= 0.5)
+        class_channel = preds if pred_index == 1 else 1.0 - preds
 
     grads = tape.gradient(class_channel, last_conv_layer_output)
     pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
@@ -194,7 +199,9 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
     last_conv_layer_output = last_conv_layer_output[0]
     heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
     heatmap = tf.squeeze(heatmap)
-    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    heatmap = tf.maximum(heatmap, 0)
+    max_val = tf.math.reduce_max(heatmap)
+    heatmap = heatmap / max_val if float(max_val) > 0 else heatmap
     return heatmap.numpy()
 
 def display_gradcam(img_path, heatmap, alpha=0.4):
@@ -204,12 +211,11 @@ def display_gradcam(img_path, heatmap, alpha=0.4):
     img = cv2.imread(img_path)
     img = cv2.resize(img, (224, 224))
     
-    heatmap = np.uint8(255 * heatmap)
+    heatmap = cv2.resize(np.uint8(255 * heatmap), (224, 224))
     jet = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     
-    superimposed_img = jet * alpha + img
-    superimposed_img = tf.keras.preprocessing.image.array_to_img(superimposed_img)
-    
+    superimposed_img = np.clip(jet * alpha + img, 0, 255)
+
     plt.figure(figsize=(8, 8))
     plt.subplot(1, 2, 1)
     plt.title("Original")
@@ -217,32 +223,25 @@ def display_gradcam(img_path, heatmap, alpha=0.4):
     
     plt.subplot(1, 2, 2)
     plt.title("Grad-CAM")
-    plt.imshow(superimposed_img)
+    plt.imshow(cv2.cvtColor(np.uint8(superimposed_img), cv2.COLOR_BGR2RGB))
     plt.show()
 
-def plot_class_distribution(train_gen, dataset_name, save_path=None):
+def _train_dir(dataset_name, split=None, base_dir='.'):
+    from data_loader import get_split_dir
+    key = "malaria" if dataset_name.lower() == "malaria" else "tb"
+    return os.path.join(get_split_dir(os.path.abspath(base_dir), key, split), "train")
+
+def plot_class_distribution(train_gen, dataset_name, save_path=None, split=None, base_dir='.'):
     """
-    Plots a bar chart showing the balance of classes in the training set.
+    Plots a bar chart showing the balance of classes in the training set of a split.
     """
-    import os
-    
-    if dataset_name.lower() == "malaria":
-        train_dir = "data/malaria/cell_images/cell_images_split/train"
-    else:
-        train_dir = "data/tuberculosis/TB_Chest_Radiography_Database_split/train"
-        
-    classes = []
-    values = []
-    
-    if os.path.exists(train_dir):
-        subdirs = sorted([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))])
-        for d in subdirs:
-            classes.append(d)
-            values.append(len(os.listdir(os.path.join(train_dir, d))))
-    else:
-        # Fallback if split dir isn't found
-        classes = ["Class 0", "Class 1"]
-        values = [1000, 1000]
+    train_dir = _train_dir(dataset_name, split, base_dir)
+    if not os.path.exists(train_dir):
+        print(f"Training folder {train_dir} not found; load the split first.")
+        return
+
+    classes = sorted([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))])
+    values = [len(os.listdir(os.path.join(train_dir, d))) for d in classes]
     
     plt.figure(figsize=(8, 6))
     bars = plt.bar(classes, values, color=['#1f77b4', '#ff7f0e'][:len(classes)])
@@ -257,18 +256,12 @@ def plot_class_distribution(train_gen, dataset_name, save_path=None):
         plt.savefig(save_path, bbox_inches='tight', dpi=300)
     plt.show()
 
-def plot_sample_images(train_gen, dataset_name, num_images=16, save_path=None):
+def plot_sample_images(train_gen, dataset_name, num_images=16, save_path=None, split=None, base_dir='.'):
     """
     Plots a grid of sample images, guaranteeing an equal split between classes.
     """
-    import numpy as np
-    import os
-    
     # Infer class names from dataset directory structure
-    if dataset_name.lower() == "malaria":
-        train_dir = "data/malaria/cell_images/cell_images_split/train"
-    else:
-        train_dir = "data/tuberculosis/TB_Chest_Radiography_Database_split/train"
+    train_dir = _train_dir(dataset_name, split, base_dir)
         
     if os.path.exists(train_dir):
         class_names = sorted([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))])

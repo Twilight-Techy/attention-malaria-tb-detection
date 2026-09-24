@@ -19,53 +19,59 @@ def generate_presentation(results_dir):
     
     nb.cells.append(nbf.v4.new_code_cell("""import sys\nimport os\nimport pandas as pd\nfrom IPython.display import display, Image\n\n# Ensure src is in the path to load utils\nsys.path.append(os.path.abspath('src'))\nfrom utils import plot_training_history_from_csv"""))
     
-    datasets = ["malaria", "tb"]
-    models = ["MobileNetV2", "Custom CNN", "VGG16", "ResNet50", "DenseNet121"]
+    datasets = {"malaria": "Malaria", "tb": "Tuberculosis"}
+    splits = ["70_20_10", "75_15_10", "90_5_5"]  # Train_Test_Val
+    models = {"MobileNetV2": "MobileNetV2_Attention", "Custom CNN": "Custom_CNN_Attention", "VGG16": "VGG16_Attention",
+              "ResNet50": "ResNet50_Attention", "DenseNet121": "DenseNet121_Attention"}
+    generated_dir = os.path.join(results_dir, "generated_results")
     
-    for ds in datasets:
-        nb.cells.append(nbf.v4.new_markdown_cell(f"## {ds.upper()} Pipeline Results"))
+    for ds, display_name in datasets.items():
+        nb.cells.append(nbf.v4.new_markdown_cell(f"## {display_name} Pipeline Results"))
         
-        # EDA
-        eda_dist = format_path(os.path.join(results_dir, f"eda_distribution_{ds}.png"))
-        eda_samp = format_path(os.path.join(results_dir, f"eda_samples_{ds}.png"))
-        
-        nb.cells.append(nbf.v4.new_markdown_cell(f"### Exploratory Data Analysis ({ds.upper()})"))
-        
-        eda_code = []
-        if os.path.exists(eda_dist): eda_code.append(f"display(Image(filename='{eda_dist}'))")
-        if os.path.exists(eda_samp): eda_code.append(f"display(Image(filename='{eda_samp}'))")
-        
+        # EDA and Grad-CAM attention map
+        visuals_dir = os.path.join(generated_dir, display_name, "Visuals_and_EDA")
+        nb.cells.append(nbf.v4.new_markdown_cell(f"### Exploratory Data Analysis and Attention Map ({display_name})"))
+        visuals = sorted(os.listdir(visuals_dir)) if os.path.isdir(visuals_dir) else []
+        eda_code = [f"display(Image(filename='{format_path(os.path.join(visuals_dir, v))}'))" for v in visuals if v.endswith(".png")]
         if eda_code:
-            nb.cells.append(nbf.v4.new_code_cell("\\n".join(eda_code)))
+            nb.cells.append(nbf.v4.new_code_cell("\n".join(eda_code)))
         else:
-            nb.cells.append(nbf.v4.new_markdown_cell(f"_EDA images not found in {results_dir}._"))
+            nb.cells.append(nbf.v4.new_markdown_cell(f"_EDA images not found in {visuals_dir}._"))
+        
+        for split in splits:
+            split_label = split.replace("_", ":")
+            nb.cells.append(nbf.v4.new_markdown_cell(f"### Split {split_label} (Train:Test:Val)"))
             
-        # Models
-        for model in models:
-            nb.cells.append(nbf.v4.new_markdown_cell(f"### {model} ({ds.upper()})"))
-            log_path = format_path(os.path.join(results_dir, f"training_log_{ds}_{model}.csv"))
-            if os.path.exists(log_path):
-                nb.cells.append(nbf.v4.new_code_cell(f"plot_training_history_from_csv('{log_path}', title='{model} on {ds.upper()}')"))
+            # Training histories
+            for model, layer_name in models.items():
+                log_path = format_path(os.path.join(results_dir, f"training_log_{ds}_{split}_{layer_name}.csv"))
+                if os.path.exists(log_path):
+                    nb.cells.append(nbf.v4.new_code_cell(f"plot_training_history_from_csv('{log_path}', title='{model} on {display_name} ({split_label})')"))
+                else:
+                    nb.cells.append(nbf.v4.new_markdown_cell(f"_Training log for {model} ({split_label}) not found in {results_dir}._"))
+            
+            # Benchmarks
+            csv_path = format_path(os.path.join(results_dir, f"comparative_results_{ds}_{split}.csv"))
+            general_dir = os.path.join(generated_dir, display_name, "Evaluation_Charts", f"Split_{split}", "General_Performance")
+            charts = [
+                format_path(os.path.join(general_dir, f"confusion_matrices_{display_name}_{split}.png")),
+                format_path(os.path.join(generated_dir, display_name, "Evaluation_Charts", f"Split_{split}", "AUC-ROC", f"roc_curves_{display_name}_{split}.png")),
+                format_path(os.path.join(generated_dir, display_name, "Evaluation_Charts", f"Split_{split}", "F1-Score", f"bar_chart_F1-Score_{display_name}_{split}.png")),
+            ]
+            bench_code = []
+            if os.path.exists(csv_path):
+                bench_code.append(f"df = pd.read_csv('{csv_path}')\ndisplay(df)")
+            bench_code += [f"display(Image(filename='{c}'))" for c in charts if os.path.exists(c)]
+            
+            if bench_code:
+                nb.cells.append(nbf.v4.new_code_cell("\n".join(bench_code)))
             else:
-                nb.cells.append(nbf.v4.new_markdown_cell(f"_Training log for {model} not found in {results_dir}._"))
-                
-        # Benchmarks
-        nb.cells.append(nbf.v4.new_markdown_cell(f"### Benchmark Results ({ds.upper()})"))
-        
-        csv_path = format_path(os.path.join(results_dir, f"comparative_results_{ds}.csv"))
-        roc_path = format_path(os.path.join(results_dir, f"comparative_roc_{ds}.png"))
-        f1_path = format_path(os.path.join(results_dir, f"comparative_f1_{ds}.png"))
-        
-        bench_code = []
-        if os.path.exists(csv_path):
-            bench_code.append(f"df = pd.read_csv('{csv_path}')\\ndisplay(df)")
-        if os.path.exists(roc_path): bench_code.append(f"display(Image(filename='{roc_path}'))")
-        if os.path.exists(f1_path): bench_code.append(f"display(Image(filename='{f1_path}'))")
-        
-        if bench_code:
-            nb.cells.append(nbf.v4.new_code_cell("\\n".join(bench_code)))
-        else:
-            nb.cells.append(nbf.v4.new_markdown_cell(f"_Benchmark results not found in {results_dir}._"))
+                nb.cells.append(nbf.v4.new_markdown_cell(f"_Benchmark results for split {split_label} not found in {results_dir}._"))
+    
+    report_path = format_path(os.path.join(generated_dir, "Documentation_and_Reports", "report_tables.md"))
+    if os.path.exists(report_path):
+        nb.cells.append(nbf.v4.new_markdown_cell("## Report Tables"))
+        nb.cells.append(nbf.v4.new_code_cell(f"from IPython.display import Markdown\ndisplay(Markdown(open('{report_path}').read()))"))
             
     with open('presentation.ipynb', 'w') as f:
         nbf.write(nb, f)

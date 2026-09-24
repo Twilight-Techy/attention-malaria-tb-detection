@@ -12,3 +12,4 @@ nbformat
 tqdm
 statsmodels
 split-folders
+tabulate

@@ -1,5 +1,6 @@
 import tensorflow as tf
 import os
+import shutil
 import cv2
 import numpy as np
 import splitfolders
@@ -63,14 +64,15 @@ def train_augment(images, labels):
     images = data_augmentation(images, training=True)
     return images, labels
 
-def create_data_generators(data_dir, output_dir, target_size=(224, 224), batch_size=32):
+def create_data_generators(data_dir, output_dir, target_size=(224, 224), batch_size=32, ratio=(0.7, 0.15, 0.15)):
     """
-    Physically splits the data into Train (70%), Validation (15%), and Test (15%) subsets.
+    Physically splits the data into Train, Validation, and Test subsets (default 70/15/15).
+    `ratio` is given in splitfolders order: (train, val, test).
     Then creates highly optimized tf.data pipelines for each split.
     """
     if not os.path.exists(output_dir):
-        print(f"Splitting dataset into Train/Val/Test subsets in {output_dir}...")
-        splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=(0.7, 0.15, 0.15), group_prefix=None)
+        print(f"Splitting dataset into Train/Val/Test subsets {ratio} in {output_dir}...")
+        splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=ratio, group_prefix=None)
     
     train_dir = os.path.join(output_dir, "train")
     val_dir = os.path.join(output_dir, "val")
@@ -118,18 +120,79 @@ def create_data_generators(data_dir, output_dir, target_size=(224, 224), batch_s
     
     return train_ds, val_ds, test_ds
 
-def load_malaria_data(base_dir, data_dir=None, batch_size=32):
+def split_to_ratio(split):
+    """
+    Converts a split tag written Train_Test_Val (e.g. "70_20_10") into the
+    (train, val, test) ratio tuple expected by splitfolders.
+    """
+    train, test, val = (int(v) / 100 for v in split.split("_"))
+    return (train, val, test)
+
+def get_split_dir(base_dir, dataset_name, split=None):
+    """
+    Directory holding the physical train/val/test folders (and tf.data caches) of one split.
+    """
+    prefix = "malaria" if dataset_name == "malaria" else "tb"
+    suffix = f"_{split}" if split else ""
+    return os.path.join(base_dir, "data", f"{prefix}_split{suffix}")
+
+def cleanup_split(base_dir, dataset_name, split):
+    """
+    Deletes a finished split's copied images and caches to free disk space before the next split.
+    """
+    split_dir = get_split_dir(base_dir, dataset_name, split)
+    if os.path.exists(split_dir):
+        shutil.rmtree(split_dir, ignore_errors=True)
+
+def build_tb_source_dir(base_dir, tb_data_dir, niaid_tb_dir=None):
+    """
+    Combines the public Kaggle TB database (Normal + 700 Tuberculosis images) with the 2,800
+    NIAID TB portal images obtained under the data-sharing agreement, so the TB dataset holds
+    3,500 Normal and 3,500 Tuberculosis images. Files are symlinked (splitfolders copies the
+    real file contents), so nothing is duplicated on disk.
+    Returns the directory to split, or tb_data_dir unchanged when no NIAID folder is available.
+    """
+    if not niaid_tb_dir or not os.path.isdir(niaid_tb_dir):
+        if niaid_tb_dir:
+            print(f"NIAID TB folder {niaid_tb_dir} not found; using the public TB images only.")
+        return tb_data_dir
+
+    combined_dir = os.path.join(base_dir, "data", "tb_combined")
+    image_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tif', '.tiff')
+    sources = [
+        ("Normal", os.path.join(tb_data_dir, "Normal"), ""),
+        ("Tuberculosis", os.path.join(tb_data_dir, "Tuberculosis"), ""),
+        ("Tuberculosis", niaid_tb_dir, "NIAID-"),
+    ]
+    for class_name, src_dir, prefix in sources:
+        dst_dir = os.path.join(combined_dir, class_name)
+        os.makedirs(dst_dir, exist_ok=True)
+        for fname in os.listdir(src_dir):
+            if not fname.lower().endswith(image_exts):
+                continue
+            dst = os.path.join(dst_dir, prefix + fname)
+            if not os.path.exists(dst):
+                os.symlink(os.path.abspath(os.path.join(src_dir, fname)), dst)
+    counts = {c: len(os.listdir(os.path.join(combined_dir, c))) for c in ("Normal", "Tuberculosis")}
+    print(f"Combined TB dataset at {combined_dir}: {counts}")
+    return combined_dir
+
+def load_malaria_data(base_dir, data_dir=None, batch_size=32, split=None):
     if data_dir is None:
         data_dir = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
-    output_dir = os.path.join(base_dir, "data", "malaria_split")
+    output_dir = get_split_dir(base_dir, "malaria", split)
+    if split:
+        return create_data_generators(data_dir, output_dir, batch_size=batch_size, ratio=split_to_ratio(split))
     return create_data_generators(data_dir, output_dir, batch_size=batch_size)
 
-def load_tb_data(base_dir, data_dir=None, batch_size=32):
+def load_tb_data(base_dir, data_dir=None, batch_size=32, split=None):
     # Note: the TB dataset structure from Kaggle might vary. 
     # Update the inner path depending on how it unzips or mounts.
     if data_dir is None:
         data_dir = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
-    output_dir = os.path.join(base_dir, "data", "tb_split")
+    output_dir = get_split_dir(base_dir, "tb", split)
+    if split:
+        return create_data_generators(data_dir, output_dir, batch_size=batch_size, ratio=split_to_ratio(split))
     return create_data_generators(data_dir, output_dir, batch_size=batch_size)
 
 def load_full_production_dataset(base_dir, data_dir=None, dataset_name="malaria", target_size=(224, 224), batch_size=32):

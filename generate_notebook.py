@@ -48,9 +48,11 @@ try:
     get_ipython().system('cp /content/drive/MyDrive/Thesis_Results/*.done . 2>/dev/null || true')
     get_ipython().system('cp /content/drive/MyDrive/Thesis_Results/*.phase1_done . 2>/dev/null || true')
     get_ipython().system('cp -r /content/drive/MyDrive/Thesis_Results/backup_* . 2>/dev/null || true')
+    get_ipython().system('cp /content/drive/MyDrive/Thesis_Results/*.csv /content/drive/MyDrive/Thesis_Results/*.npz . 2>/dev/null || true')
+    get_ipython().system('cp -r /content/drive/MyDrive/Thesis_Results/generated_results . 2>/dev/null || true')
     
     # Background sync
-    get_ipython().system_raw('while true; do cp *.h5 *.done *.phase1_done *.csv *.png /content/drive/MyDrive/Thesis_Results/ 2>/dev/null; cp -r backup_* /content/drive/MyDrive/Thesis_Results/ 2>/dev/null; sleep 120; done &')
+    get_ipython().system_raw('while true; do cp *.h5 *.done *.phase1_done *.csv *.png *.npz *.zip /content/drive/MyDrive/Thesis_Results/ 2>/dev/null; cp -r backup_* generated_results /content/drive/MyDrive/Thesis_Results/ 2>/dev/null; sleep 120; done &')
     print("Background Drive Sync initialized! Your progress is safe.")
     
 except ImportError:
@@ -72,10 +74,12 @@ print("Installing dependencies...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"])
 importlib.invalidate_caches()
 
-# 2. Setup Kaggle Credentials
+# 2. Setup Kaggle Credentials (entered at runtime, never stored in the notebook)
 print("\\nAuthenticating with Kaggle...")
-os.environ['KAGGLE_USERNAME'] = 'imaksdaking'
-os.environ['KAGGLE_KEY'] = 'c73c266a0b891d30683588637504fc56' # Hardcoded API Key provided by user
+if not os.environ.get('KAGGLE_USERNAME'):
+    os.environ['KAGGLE_USERNAME'] = input("Kaggle username: ").strip()
+if not os.environ.get('KAGGLE_KEY'):
+    os.environ['KAGGLE_KEY'] = getpass.getpass("Kaggle API key: ").strip()
 
 # 3. Setup Python Path
 # Use insert(0) to prevent any pre-installed packages (like 'benchmark') from shadowing our local files!
@@ -83,9 +87,12 @@ sys.path.insert(0, os.path.abspath('src'))
 
 from data_loader import load_malaria_data, load_tb_data, load_full_production_dataset
 from models import build_custom_cnn_attention, build_resnet50_attention, build_vgg16_attention, build_mobilenetv2_attention, build_densenet121_attention
-from train import compile_model, train_model, unfreeze_and_finetune
+from train import compile_model, train_model, unfreeze_and_finetune, write_phase1_marker, read_phase1_epochs
 from utils import plot_training_history, plot_comparative_roc, plot_comparative_bar_chart
 from benchmark import evaluate_all_models
+from data_loader import cleanup_split, build_tb_source_dir
+from results import (MODEL_LAYER_NAMES, DATASET_INFO, checkpoint_path, training_log_path, comparative_csv_path,
+                     evaluation_path, save_split_evaluation, generate_attention_map, generate_all_results)
 """)
 
 data_cell = nbf.v4.new_code_cell("""# Download both datasets to the local VM disk
@@ -99,7 +106,9 @@ loop_cell_md = nbf.v4.new_markdown_cell("""## Master Execution Pipeline
 This loop sequentially tackles Malaria, then Tuberculosis. For each disease, it trains all 5 architectures, saves the optimal `.h5` model files, and outputs the final comparative benchmark metrics.
 """)
 
-loop_cell_code = nbf.v4.new_code_cell("""datasets_to_run = ["malaria", "tb"]
+loop_cell_code = nbf.v4.new_code_cell("""# Dataset splits, written Train_Test_Val (70:20:10, 75:15:10, 90:5:5)
+SPLITS = ['70_20_10', '75_15_10', '90_5_5']
+datasets_to_run = ["malaria", "tb"]
 architectures_to_run = [
     ("MobileNetV2", build_mobilenetv2_attention),
     ("Custom CNN", build_custom_cnn_attention),
@@ -108,93 +117,117 @@ architectures_to_run = [
     ("DenseNet121", build_densenet121_attention)
 ]
 
+# Raw dataset locations (downloaded by src/download_data.py)
+malaria_data_path = os.path.join(base_dir, "data", "malaria", "cell_images", "cell_images")
+tb_data_path = os.path.join(base_dir, "data", "tuberculosis", "TB_Chest_Radiography_Database")
+# The 2,800 TB images obtained from the NIAID TB portal under the data-sharing agreement.
+# They are merged into the Tuberculosis class (3,500 Normal + 700 public TB + 2,800 NIAID TB).
+niaid_tb_path = os.path.join(base_dir, "data", "tuberculosis", "NIAID_TB_Portal")  # Place the NIAID TB portal images here
+tb_data_path = build_tb_source_dir(base_dir, tb_data_path, niaid_tb_path)
+DATA_DIRS = {"malaria": malaria_data_path, "tb": tb_data_path}
+RESULTS_DIR = "generated_results"
+
 for dataset_name in datasets_to_run:
-    print(f"\\n{'='*60}\\nSTARTING EXPERIMENTAL PIPELINE FOR: {dataset_name.upper()}\\n{'='*60}")
-    
-    # 1. Load Data (Loads directly into RAM)
-    if dataset_name == "malaria":
-        train_data, val_data, test_data = load_malaria_data(base_dir, batch_size=32)
-    else:
-        train_data, val_data, test_data = load_tb_data(base_dir, batch_size=32)
+    for split in SPLITS:
+        print(f"\\n{'='*60}\\nSTARTING EXPERIMENTAL PIPELINE FOR: {dataset_name.upper()} | SPLIT {split.replace('_', ':')} (Train:Test:Val)\\n{'='*60}")
         
-    # 1.5. Exploratory Data Analysis
-    print(f"\\n--- [ Exploratory Data Analysis for {dataset_name.upper()} ] ---")
-    from utils import plot_class_distribution, plot_sample_images
-    plot_class_distribution(train_data, dataset_name, save_path=f"eda_distribution_{dataset_name}.png")
-    plot_sample_images(train_data, dataset_name, save_path=f"eda_samples_{dataset_name}.png")
+        models_dict = {name: (checkpoint_path(dataset_name, split, MODEL_LAYER_NAMES[name]), builder) for name, builder in architectures_to_run}
         
-    models_dict = {}
-    
-    # 2. Iterate and Train Models
-    for model_name, model_builder in architectures_to_run:
-        print(f"\\n--- [ Training {model_name} on {dataset_name.upper()} ] ---")
+        # FAULT TOLERANCE: Skip the whole split if every model is trained and the benchmark is saved
+        attention_file = os.path.join(RESULTS_DIR, DATASET_INFO[dataset_name]['display'], 'Visuals_and_EDA', f"attention_map_{DATASET_INFO[dataset_name]['display']}.png")
+        needs_attention_map = split == SPLITS[0] and not os.path.exists(attention_file)
+        all_trained = all(os.path.exists(f"{path}.done") for path, _ in models_dict.values())
+        if all_trained and os.path.exists(evaluation_path(dataset_name, split)) and os.path.exists(comparative_csv_path(dataset_name, split)) and not needs_attention_map:
+            print(f"[RESUME] Split {split} for {dataset_name.upper()} fully trained and benchmarked previously. Skipping!")
+            continue
         
-        # CRITICAL: Clear GPU VRAM before instantiating the next model
+        # 1. Load Data for this split
+        if dataset_name == "malaria":
+            train_data, val_data, test_data = load_malaria_data(base_dir, data_dir=malaria_data_path, batch_size=32, split=split)
+        else:
+            train_data, val_data, test_data = load_tb_data(base_dir, data_dir=tb_data_path, batch_size=32, split=split)
+        
+        # 2. Iterate and Train Models
+        for model_name, model_builder in architectures_to_run:
+            print(f"\\n--- [ Training {model_name} on {dataset_name.upper()} | Split {split} ] ---")
+            
+            # CRITICAL: Clear GPU VRAM before instantiating the next model
+            K.clear_session()
+            gc.collect()
+            
+            # Build and Compile
+            model = model_builder()
+            model = compile_model(model, learning_rate=1e-4)
+            save_path = checkpoint_path(dataset_name, split, model.name)
+            
+            # FAULT TOLERANCE: Skip if completely finished previously
+            completion_marker = f"{save_path}.done"
+            phase1_marker = f"{save_path}.phase1_done"
+            
+            if os.path.exists(completion_marker):
+                print(f"\\n[RESUME] Model {model.name} fully completed previously. Skipping to next!")
+                continue
+            elif os.path.exists(save_path) and os.path.exists(phase1_marker):
+                print(f"\\n[RESUME] Found successful Phase 1 weights ({save_path}) and phase 1 completion marker.")
+                print(f"Loading weights and jumping straight to Phase 2 (Fine-Tuning) to save time!")
+                model.load_weights(save_path)
+                phase1_completed = True
+            elif os.path.exists(save_path) and not os.path.exists(phase1_marker):
+                print(f"\\n[RESUME] Found partial Phase 1 weights ({save_path}) but NO phase 1 completion marker.")
+                print(f"Phase 1 crashed mid-training. Re-invoking Phase 1 (Keras will automatically resume from the exact epoch using your Backup Folder).")
+                phase1_completed = False
+            else:
+                phase1_completed = False
+                
+            log_path = training_log_path(dataset_name, split, model.name)
+            
+            if not phase1_completed:
+                # Train (Base Layers Frozen)
+                print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
+                history = train_model(model, train_data, val_data, epochs=15, model_path=save_path, csv_log_path=log_path)
+                
+                # Mark Phase 1 as completely finished (records how many epochs it ran)
+                write_phase1_marker(phase1_marker, history)
+            
+            # Fine-Tune (Unfreezing Top Layers), numbered straight after the last Phase 1 epoch
+            print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
+            unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path, model_path=save_path, initial_epoch=read_phase1_epochs(phase1_marker))
+            
+            # Mark as completely finished
+            with open(completion_marker, 'w') as f:
+                f.write("training and finetuning complete")
+                
+        # 3. Benchmark this split on its held-out test set and persist the predictions
+        print(f"\\n--- [ Benchmarking All {dataset_name.upper()} Architectures | Split {split} ] ---")
         K.clear_session()
         gc.collect()
+        df, y_true, predictions_dict = evaluate_all_models(models_dict, test_data, dataset_name, output_csv=comparative_csv_path(dataset_name, split))
+        save_split_evaluation(dataset_name, split, y_true, predictions_dict)
         
-        # Build and Compile
-        model = model_builder()
-        model = compile_model(model, learning_rate=1e-4)
-        save_path = f"best_{dataset_name}_{model.name}.h5"
-        models_dict[model_name] = save_path
+        print("\\nFinal Comparative DataFrame:")
+        display(df)
         
-        # FAULT TOLERANCE: Skip if completely finished previously
-        completion_marker = f"{save_path}.done"
-        phase1_marker = f"{save_path}.phase1_done"
+        print("\\nGenerating ROC Curves...")
+        plot_comparative_roc(y_true, predictions_dict, title=f"Comparative ROC Curves ({dataset_name.upper()}, Split {split.replace('_', ':')})", save_path=f"comparative_roc_{dataset_name}_{split}.png")
         
-        if os.path.exists(completion_marker):
-            print(f"\\n[RESUME] Model {model.name} fully completed previously. Skipping to next!")
-            continue
-        elif os.path.exists(save_path) and os.path.exists(phase1_marker):
-            print(f"\\n[RESUME] Found successful Phase 1 weights ({save_path}) and phase 1 completion marker.")
-            print(f"Loading weights and jumping straight to Phase 2 (Fine-Tuning) to save time!")
-            model.load_weights(save_path)
-            phase1_completed = True
-        elif os.path.exists(save_path) and not os.path.exists(phase1_marker):
-            print(f"\\n[RESUME] Found partial Phase 1 weights ({save_path}) but NO phase 1 completion marker.")
-            print(f"Phase 1 crashed mid-training. Re-invoking Phase 1 (Keras will automatically resume from the exact epoch using your Backup Folder).")
-            phase1_completed = False
-        else:
-            phase1_completed = False
-            
-        log_path = f"training_log_{dataset_name}_{model.name}.csv"
+        print("\\nGenerating F1-Score Bar Chart...")
+        plot_comparative_bar_chart(df, metric='F1-Score', title=f"F1-Score Comparison ({dataset_name.upper()}, Split {split.replace('_', ':')})", save_path=f"comparative_f1_{dataset_name}_{split}.png")
         
-        if not phase1_completed:
-            # Train (Base Layers Frozen)
-            print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
-            train_model(model, train_data, val_data, epochs=15, model_path=save_path, csv_log_path=log_path)
-            
-            # Mark Phase 1 as completely finished
-            with open(phase1_marker, 'w') as f:
-                f.write("phase 1 complete")
+        # 4. Grad-CAM attention map from the best model of the first split
+        if split == SPLITS[0]:
+            print("\\nGenerating Grad-CAM Attention Map...")
+            generate_attention_map(dataset_name, split, models_dict, df, output_dir=RESULTS_DIR, base_dir=base_dir)
         
-        # Fine-Tune (Unfreezing Top Layers)
-        print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
-        unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path, model_path=save_path, initial_epoch=15)
-        
-        # Mark as completely finished
-        with open(completion_marker, 'w') as f:
-            f.write("training and finetuning complete")
-            
-    # 3. Benchmark Dataset (Generates Results Chapter Tables/Graphs)
-    print(f"\\n--- [ Benchmarking All {dataset_name.upper()} Architectures ] ---")
-    df, y_true, predictions_dict = evaluate_all_models(models_dict, test_data, dataset_name, output_csv=f"comparative_results_{dataset_name}.csv")
-    
-    print("\\nFinal Comparative DataFrame:")
-    display(df)
-    
-    print("\\nGenerating ROC Curves...")
-    plot_comparative_roc(y_true, predictions_dict, title=f"Comparative ROC Curves ({dataset_name.upper()})", save_path=f"comparative_roc_{dataset_name}.png")
-    
-    print("\\nGenerating F1-Score Bar Chart...")
-    plot_comparative_bar_chart(df, metric='F1-Score', title=f"F1-Score Comparison ({dataset_name.upper()})", save_path=f"comparative_f1_{dataset_name}.png")
-    
-    # 4. Clean up Dataset from RAM before loading the next disease
-    del train_data
-    del val_data
-    del test_data
-    gc.collect()
+        # 5. Clean up this split from RAM and disk before loading the next one
+        del train_data
+        del val_data
+        del test_data
+        gc.collect()
+        cleanup_split(base_dir, dataset_name, split)
+
+# 6. Build the complete generated_results folder (charts, EDA, logs, reports) from all saved runs
+print(f"\\n{'='*60}\\nGENERATING THESIS RESULTS FOLDER\\n{'='*60}")
+generate_all_results(DATA_DIRS, output_dir=RESULTS_DIR)
     
 print("\\n\\nPIPELINE COMPLETE. All experiments successfully finished and data saved.")
 """)
@@ -241,7 +274,7 @@ print(f"\\nSUCCESS! Final deployment model saved to: {final_save_path}")
 
 nb.cells = [title_cell, colab_setup_cell, setup_cell, data_cell, loop_cell_md, loop_cell_code, production_md, production_code]
 
-with open('c:/MyProjects/ml/main.ipynb', 'w') as f:
+with open('main.ipynb', 'w') as f:
     nbf.write(nb, f)
 
 print("Jupyter Notebook Master Pipeline created successfully!")

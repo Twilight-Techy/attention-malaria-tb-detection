@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from utils import evaluate_comprehensive_metrics
+from results import to_disease_positive
 
 def measure_inference_latency(model, test_data, num_samples=100):
     """
@@ -22,6 +23,25 @@ def measure_inference_latency(model, test_data, num_samples=100):
     
     avg_latency_ms = ((end_time - start_time) / min(num_samples, len(images))) * 1000
     return avg_latency_ms
+
+def compute_flops_g(model, input_shape=(224, 224, 3)):
+    """
+    Counts the floating point operations of a single-image forward pass (in GFLOPs)
+    by freezing the model graph and running the TensorFlow profiler over it.
+    """
+    try:
+        from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
+        forward = tf.function(lambda x: model(x, training=False))
+        concrete = forward.get_concrete_function(tf.TensorSpec([1, *input_shape], tf.float32))
+        frozen_func, _ = convert_variables_to_constants_v2_as_graph(concrete)
+        options = tf.compat.v1.profiler.ProfileOptionBuilder(
+            tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
+        ).with_empty_output().build()
+        info = tf.compat.v1.profiler.profile(graph=frozen_func.graph, run_meta=tf.compat.v1.RunMetadata(), cmd='op', options=options)
+        return info.total_float_ops / 1e9
+    except Exception as e:
+        print(f"Could not compute FLOPs for {model.name}: {e}")
+        return float('nan')
 
 def get_model_size_mb(model_path):
     if os.path.exists(model_path):
@@ -47,9 +67,8 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
             
     y_true = np.array(y_true)
     all_images = np.vstack(all_images)
-
-    from attention import cbam_block, channel_attention, spatial_attention
-    custom_objects = {'cbam_block': cbam_block, 'channel_attention': channel_attention, 'spatial_attention': spatial_attention}
+    # Report everything with the disease class (Parasitized / Tuberculosis) as the positive class
+    y_true_pos, _ = to_disease_positive(dataset_name, y_true, np.zeros(len(y_true)))
 
     for model_name, (model_path, model_builder) in models_dict.items():
         if not os.path.exists(model_path):
@@ -63,12 +82,18 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
         param_count = model.count_params()
         size_mb = get_model_size_mb(model_path)
         latency_ms = measure_inference_latency(model, test_data)
+        flops_g = compute_flops_g(model)
         
         print("Generating predictions...")
-        y_pred_probs = model.predict(all_images, verbose=0).flatten()
+        # Warm up at the batch size used below so graph tracing is not timed
+        _ = model.predict(all_images[:32], batch_size=32, verbose=0)
+        start_time = time.time()
+        y_pred_probs = model.predict(all_images, batch_size=32, verbose=0).flatten()
+        throughput_fps = len(all_images) / (time.time() - start_time)
+        _, y_pred_probs = to_disease_positive(dataset_name, y_true, y_pred_probs)
         predictions_dict[model_name] = y_pred_probs
         
-        metrics = evaluate_comprehensive_metrics(y_true, y_pred_probs)
+        metrics = evaluate_comprehensive_metrics(y_true_pos, y_pred_probs)
         
         row = {
             "Architecture": model_name,
@@ -82,7 +107,9 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
             "RMSE": metrics.get('rmse', 0),
             "Parameters (Millions)": param_count / 1e6,
             "Size (MB)": size_mb,
-            "Latency (ms/image)": latency_ms
+            "Latency (ms/image)": latency_ms,
+            "Throughput (images/s)": throughput_fps,
+            "FLOPs (G)": flops_g
         }
         results.append(row)
         
@@ -90,4 +117,4 @@ def evaluate_all_models(models_dict, test_data, dataset_name, output_csv="compar
     df.to_csv(output_csv, index=False)
     print(f"\nComparative results saved to {output_csv}")
     
-    return df, y_true, predictions_dict
+    return df, y_true_pos, predictions_dict
