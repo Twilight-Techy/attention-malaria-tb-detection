@@ -54,10 +54,11 @@ os.makedirs(results_dir, exist_ok=True)
 
 # Auto-recover weights and logs from any mounted previous Kaggle versions
 print("Restoring previous training weights and logs, preserving exact folder structure...")
-# The previous session's run state is attached as the dataset imaksdaking/amtb-run-state;
+# The previous session's run state is attached as the dataset imaksdaking/amtb-run-state or as the
+# output of the previous amtb-pipeline kernel run;
 # find its Thesis_Results folder wherever Kaggle mounts it.
 import glob
-RESUME_SOURCES = ['amtb-run-state']
+RESUME_SOURCES = ['amtb-run-state', 'amtb-pipeline']
 source_dirs = [d for pattern in ('/kaggle/input/*/Thesis_Results', '/kaggle/input/*/*/Thesis_Results', '/kaggle/input/*/*/*/Thesis_Results')
                for d in glob.glob(pattern) if any(name in d for name in RESUME_SOURCES)]
 for source_dir in source_dirs:
