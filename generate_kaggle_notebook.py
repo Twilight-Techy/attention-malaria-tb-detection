@@ -40,8 +40,9 @@ results_dir = os.path.join(working_dir, 'Thesis_Results')
 get_ipython().run_line_magic('cd', working_dir)
 
 # Clone repository if it doesn't exist, otherwise pull latest changes
+REPO_BRANCH = 'main'
 if not os.path.exists(repo_name):
-    get_ipython().system('git clone https://github.com/Twilight-Techy/attention-malaria-tb-detection.git')
+    get_ipython().system(f'git clone --branch {REPO_BRANCH} https://github.com/Twilight-Techy/attention-malaria-tb-detection.git')
 else:
     get_ipython().system('cd attention-malaria-tb-detection && git pull')
 
@@ -53,9 +54,17 @@ os.makedirs(results_dir, exist_ok=True)
 
 # Auto-recover weights and logs from any mounted previous Kaggle versions
 print("Restoring previous training weights and logs, preserving exact folder structure...")
-source_dir = '/kaggle/input/datasets/imaksdaking/my-thesis-weights-v2/Thesis_Results'
-print(f"Copying from {source_dir}...")
-get_ipython().system(f'cp -rn {source_dir}/* {results_dir}/ 2>/dev/null || true')
+# The previous session's run state is attached as the dataset imaksdaking/amtb-run-state;
+# find its Thesis_Results folder wherever Kaggle mounts it.
+import glob
+RESUME_SOURCES = ['amtb-run-state']
+source_dirs = [d for pattern in ('/kaggle/input/*/Thesis_Results', '/kaggle/input/*/*/Thesis_Results', '/kaggle/input/*/*/*/Thesis_Results')
+               for d in glob.glob(pattern) if any(name in d for name in RESUME_SOURCES)]
+for source_dir in source_dirs:
+    print(f"Copying from {source_dir}...")
+    get_ipython().system(f'cp -rn {source_dir}/* {results_dir}/ 2>/dev/null || true')
+if not source_dirs:
+    print("No previous run state attached; starting fresh.")
 
 print("\\nRecovered files in Thesis_Results:")
 get_ipython().system(f'ls -lh {results_dir}')
@@ -95,8 +104,20 @@ from benchmark import evaluate_all_models
 from data_loader import cleanup_split, build_tb_source_dir
 from results import (MODEL_LAYER_NAMES, DATASET_INFO, checkpoint_path, training_log_path, comparative_csv_path,
                      evaluation_path, save_split_evaluation, generate_attention_map, generate_all_results)
-    
+
 base_dir = os.path.abspath('.')
+# Split images and tf.data caches are large (the malaria training cache alone is ~11 GB), so they
+# live outside /kaggle/working, which is saved as the notebook output and limited to 20 GB.
+data_base_dir = '/tmp/amtb'
+os.makedirs(data_base_dir, exist_ok=True)
+
+# Kaggle stops a session after 12 hours. Stop starting new training phases after TIME_BUDGET_HOURS
+# so the run ends cleanly and its checkpoints and logs are saved; the next session resumes from them.
+import time
+SESSION_START = time.time()
+TIME_BUDGET_HOURS = float(os.environ.get('AMTB_TIME_BUDGET_HOURS', '10'))
+def out_of_time():
+    return (time.time() - SESSION_START) / 3600 > TIME_BUDGET_HOURS
 """)
 
 loop_cell_md = nbf.v4.new_markdown_cell("""## Master Execution Pipeline
@@ -123,19 +144,33 @@ if not os.path.exists(malaria_data_path):
 tb_data_path = '/kaggle/input/datasets/tawsifurrahman/tuberculosis-tb-chest-xray-dataset/TB_Chest_Radiography_Database'
 if not os.path.exists(tb_data_path):
     tb_data_path = '/kaggle/input/datasets/tawsifurrahman/tuberculosis-tb-chest-xray-dataset'
-# The 2,800 TB images obtained from the NIAID TB portal under the data-sharing agreement.
-# They are merged into the Tuberculosis class (3,500 Normal + 700 public TB + 2,800 NIAID TB).
-niaid_tb_path = '/kaggle/input/datasets/niaid-tb-portal/tb-images'  # Adjust to where the NIAID TB portal images are mounted
-tb_data_path = build_tb_source_dir(base_dir, tb_data_path, niaid_tb_path)
+
+def find_class_root(current, class_names):
+    # Falls back to searching /kaggle/input when a dataset is mounted under a different path
+    if all(os.path.isdir(os.path.join(current, c)) for c in class_names):
+        return current
+    for root, dirs, _ in sorted(os.walk('/kaggle/input')):
+        if all(c in dirs for c in class_names):
+            print(f"Found {class_names} under {root}")
+            return root
+    raise FileNotFoundError(f"No folder with {class_names} found under /kaggle/input")
+malaria_data_path = find_class_root(malaria_data_path, ('Parasitized', 'Uninfected'))
+tb_data_path = find_class_root(tb_data_path, ('Normal', 'Tuberculosis'))
+# Each of the 700 public Tuberculosis images is used 5 times (700 x 5 = 3,500) so both classes hold
+# 3,500 images. The split keeps an image and its copies in the same subset (see data_loader.grouped_split).
+tb_data_path = build_tb_source_dir(data_base_dir, tb_data_path, tb_copies=5)
 DATA_DIRS = {"malaria": malaria_data_path, "tb": tb_data_path}
 RESULTS_DIR = "generated_results"
+stopped_early = False
 
 for dataset_name in datasets_to_run:
     for split in SPLITS:
+        if stopped_early:
+            break
         print(f"\\n{'='*60}\\nSTARTING EXPERIMENTAL PIPELINE FOR: {dataset_name.upper()} | SPLIT {split.replace('_', ':')} (Train:Test:Val)\\n{'='*60}")
-        
+
         models_dict = {name: (checkpoint_path(dataset_name, split, MODEL_LAYER_NAMES[name]), builder) for name, builder in architectures_to_run}
-        
+
         # FAULT TOLERANCE: Skip the whole split if every model is trained and the benchmark is saved
         attention_file = os.path.join(RESULTS_DIR, DATASET_INFO[dataset_name]['display'], 'Visuals_and_EDA', f"attention_map_{DATASET_INFO[dataset_name]['display']}.png")
         needs_attention_map = split == SPLITS[0] and not os.path.exists(attention_file)
@@ -143,30 +178,34 @@ for dataset_name in datasets_to_run:
         if all_trained and os.path.exists(evaluation_path(dataset_name, split)) and os.path.exists(comparative_csv_path(dataset_name, split)) and not needs_attention_map:
             print(f"[RESUME] Split {split} for {dataset_name.upper()} fully trained and benchmarked previously. Skipping!")
             continue
-        
+
         # 1. Load Data for this split
         if dataset_name == "malaria":
-            train_data, val_data, test_data = load_malaria_data(base_dir, data_dir=malaria_data_path, batch_size=32, split=split)
+            train_data, val_data, test_data = load_malaria_data(data_base_dir, data_dir=malaria_data_path, batch_size=32, split=split)
         else:
-            train_data, val_data, test_data = load_tb_data(base_dir, data_dir=tb_data_path, batch_size=32, split=split)
-        
+            train_data, val_data, test_data = load_tb_data(data_base_dir, data_dir=tb_data_path, batch_size=32, split=split)
+
         # 2. Iterate and Train Models
         for model_name, model_builder in architectures_to_run:
             print(f"\\n--- [ Training {model_name} on {dataset_name.upper()} | Split {split} ] ---")
-            
+            if out_of_time():
+                print(f"[TIME BUDGET] {TIME_BUDGET_HOURS}h used; stopping so this session's progress is saved. Re-run to resume.")
+                stopped_early = True
+                break
+
             # CRITICAL: Clear GPU VRAM before instantiating the next model
             K.clear_session()
             gc.collect()
-            
+
             # Build and Compile
             model = model_builder()
             model = compile_model(model, learning_rate=1e-4)
             save_path = checkpoint_path(dataset_name, split, model.name)
-            
+
             # FAULT TOLERANCE: Skip if completely finished previously
             completion_marker = f"{save_path}.done"
             phase1_marker = f"{save_path}.phase1_done"
-            
+
             if os.path.exists(completion_marker):
                 print(f"\\n[RESUME] Model {model.name} fully completed previously. Skipping to next!")
                 continue
@@ -181,62 +220,77 @@ for dataset_name in datasets_to_run:
                 phase1_completed = False
             else:
                 phase1_completed = False
-                
+
             log_path = training_log_path(dataset_name, split, model.name)
-            
+
             if not phase1_completed:
                 # Train (Base Layers Frozen)
                 print(f"\\nPhase 1: Freezing Base Layers and Training Classification Head")
                 history = train_model(model, train_data, val_data, epochs=15, model_path=save_path, csv_log_path=log_path)
-                
+
                 # Mark Phase 1 as completely finished (records how many epochs it ran)
                 write_phase1_marker(phase1_marker, history)
-            
+
+            if out_of_time():
+                print(f"[TIME BUDGET] {TIME_BUDGET_HOURS}h used after Phase 1; stopping. Re-run to resume at Phase 2.")
+                stopped_early = True
+                break
+
             # Fine-Tune (Unfreezing Top Layers), numbered straight after the last Phase 1 epoch
             print(f"\\nPhase 2: Fine-Tuning Top Feature Extractors")
             unfreeze_and_finetune(model, train_data, val_data, layers_to_unfreeze=20, epochs=10, learning_rate=1e-5, csv_log_path=log_path, model_path=save_path, initial_epoch=read_phase1_epochs(phase1_marker))
-            
+
             # Mark as completely finished
             with open(completion_marker, 'w') as f:
                 f.write("training and finetuning complete")
-                
+
+        if stopped_early:
+            break
+
         # 3. Benchmark this split on its held-out test set and persist the predictions
         print(f"\\n--- [ Benchmarking All {dataset_name.upper()} Architectures | Split {split} ] ---")
         K.clear_session()
         gc.collect()
         df, y_true, predictions_dict = evaluate_all_models(models_dict, test_data, dataset_name, output_csv=comparative_csv_path(dataset_name, split))
         save_split_evaluation(dataset_name, split, y_true, predictions_dict)
-        
+
         print("\\nFinal Comparative DataFrame:")
         display(df)
-        
+
         print("\\nGenerating ROC Curves...")
         plot_comparative_roc(y_true, predictions_dict, title=f"Comparative ROC Curves ({dataset_name.upper()}, Split {split.replace('_', ':')})", save_path=f"comparative_roc_{dataset_name}_{split}.png")
-        
+
         print("\\nGenerating F1-Score Bar Chart...")
         plot_comparative_bar_chart(df, metric='F1-Score', title=f"F1-Score Comparison ({dataset_name.upper()}, Split {split.replace('_', ':')})", save_path=f"comparative_f1_{dataset_name}_{split}.png")
-        
+
         # 4. Grad-CAM attention map from the best model of the first split
         if split == SPLITS[0]:
             print("\\nGenerating Grad-CAM Attention Map...")
-            generate_attention_map(dataset_name, split, models_dict, df, output_dir=RESULTS_DIR, base_dir=base_dir)
-        
+            generate_attention_map(dataset_name, split, models_dict, df, output_dir=RESULTS_DIR, base_dir=data_base_dir)
+
         # 5. Clean up this split from RAM and disk before loading the next one
         del train_data
         del val_data
         del test_data
         gc.collect()
-        cleanup_split(base_dir, dataset_name, split)
+        cleanup_split(data_base_dir, dataset_name, split)
+    if stopped_early:
+        break
 
-# 6. Build the complete generated_results folder (charts, EDA, logs, reports) from all saved runs
-print(f"\\n{'='*60}\\nGENERATING THESIS RESULTS FOLDER\\n{'='*60}")
-generate_all_results(DATA_DIRS, output_dir=RESULTS_DIR)
-    
-print("\\n\\nPIPELINE COMPLETE. All experiments successfully finished and data saved.")
+if stopped_early:
+    print("\\n\\nPIPELINE PAUSED (time budget). Progress is saved; run the notebook again to continue.")
+else:
+    # 6. Build the complete generated_results folder (charts, EDA, logs, reports) from all saved runs
+    print(f"\\n{'='*60}\\nGENERATING THESIS RESULTS FOLDER\\n{'='*60}")
+    generate_all_results(DATA_DIRS, output_dir=RESULTS_DIR)
+    print("\\n\\nPIPELINE COMPLETE. All experiments successfully finished and data saved.")
+
+# Final sync of this session's progress into Thesis_Results (the background loop only runs every 2 minutes)
+get_ipython().system(f'cp *.h5 *.done *.phase1_done *.csv *.png *.npz *.zip {results_dir}/ 2>/dev/null; cp -r backup_* generated_results {results_dir}/ 2>/dev/null')
 """)
 
 production_md = nbf.v4.new_markdown_cell("""## 8. Final Production Deployment Pipeline
-**[POST-THESIS ONLY]** Once you have completed your academic benchmarks above, you will identify your absolute best-performing architecture for Malaria and Tuberculosis. 
+**[POST-THESIS ONLY]** Once you have completed your academic benchmarks above, you will identify your absolute best-performing architecture for Malaria and Tuberculosis.
 
 To prepare for actual hospital deployment (Section 1.5.v of the report), you should retrain that winning architecture on **100% of the available data** (Train + Val + Test merged into one).
 Below is the template to generate your final deployment `.h5` model. Uncomment and run it when ready!
@@ -254,7 +308,7 @@ if not os.path.exists(kaggle_malaria_path):
     kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria/cell_images'
     if not os.path.exists(kaggle_malaria_path):
         kaggle_malaria_path = '/kaggle/input/datasets/iarunava/cell-images-for-detecting-malaria'
-    
+
 production_data = load_full_production_dataset(base_dir, data_dir=kaggle_malaria_path, dataset_name=deployment_dataset, batch_size=32)
 
 # 2. Build winning architecture

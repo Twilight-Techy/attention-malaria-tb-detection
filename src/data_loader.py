@@ -72,7 +72,10 @@ def create_data_generators(data_dir, output_dir, target_size=(224, 224), batch_s
     """
     if not os.path.exists(output_dir):
         print(f"Splitting dataset into Train/Val/Test subsets {ratio} in {output_dir}...")
-        splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=ratio, group_prefix=None)
+        if has_duplicates(data_dir):
+            grouped_split(data_dir, output_dir, ratio=ratio, seed=42)
+        else:
+            splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=ratio, group_prefix=None)
     
     train_dir = os.path.join(output_dir, "train")
     val_dir = os.path.join(output_dir, "val")
@@ -144,38 +147,72 @@ def cleanup_split(base_dir, dataset_name, split):
     if os.path.exists(split_dir):
         shutil.rmtree(split_dir, ignore_errors=True)
 
-def build_tb_source_dir(base_dir, tb_data_dir, niaid_tb_dir=None):
+DUPLICATE_TAG = "__dup"
+IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tif', '.tiff')
+
+def build_tb_source_dir(base_dir, tb_data_dir, tb_copies=5):
     """
-    Combines the public Kaggle TB database (Normal + 700 Tuberculosis images) with the 2,800
-    NIAID TB portal images obtained under the data-sharing agreement, so the TB dataset holds
-    3,500 Normal and 3,500 Tuberculosis images. Files are symlinked (splitfolders copies the
-    real file contents), so nothing is duplicated on disk.
-    Returns the directory to split, or tb_data_dir unchanged when no NIAID folder is available.
+    Builds the TB dataset used for training: the public Kaggle TB database (3,500 Normal +
+    700 Tuberculosis images) with every Tuberculosis image repeated `tb_copies` times in total
+    (700 x 5 = 3,500), so both classes hold 3,500 images. Extra copies are named
+    <name>__dup<k><ext>. Files are symlinked (the split step copies the real file contents),
+    so nothing is duplicated on disk here.
+    Returns the directory to split, or tb_data_dir unchanged when tb_copies <= 1.
     """
-    if not niaid_tb_dir or not os.path.isdir(niaid_tb_dir):
-        if niaid_tb_dir:
-            print(f"NIAID TB folder {niaid_tb_dir} not found; using the public TB images only.")
+    if tb_copies <= 1:
         return tb_data_dir
 
     combined_dir = os.path.join(base_dir, "data", "tb_combined")
-    image_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tif', '.tiff')
-    sources = [
-        ("Normal", os.path.join(tb_data_dir, "Normal"), ""),
-        ("Tuberculosis", os.path.join(tb_data_dir, "Tuberculosis"), ""),
-        ("Tuberculosis", niaid_tb_dir, "NIAID-"),
-    ]
-    for class_name, src_dir, prefix in sources:
+    for class_name, copies in (("Normal", 1), ("Tuberculosis", tb_copies)):
+        src_dir = os.path.join(tb_data_dir, class_name)
         dst_dir = os.path.join(combined_dir, class_name)
         os.makedirs(dst_dir, exist_ok=True)
-        for fname in os.listdir(src_dir):
-            if not fname.lower().endswith(image_exts):
+        for fname in sorted(os.listdir(src_dir)):
+            if not fname.lower().endswith(IMAGE_EXTS):
                 continue
-            dst = os.path.join(dst_dir, prefix + fname)
-            if not os.path.exists(dst):
-                os.symlink(os.path.abspath(os.path.join(src_dir, fname)), dst)
+            stem, ext = os.path.splitext(fname)
+            for k in range(copies):
+                dst = os.path.join(dst_dir, fname if k == 0 else f"{stem}{DUPLICATE_TAG}{k}{ext}")
+                if not os.path.exists(dst):
+                    os.symlink(os.path.abspath(os.path.join(src_dir, fname)), dst)
     counts = {c: len(os.listdir(os.path.join(combined_dir, c))) for c in ("Normal", "Tuberculosis")}
-    print(f"Combined TB dataset at {combined_dir}: {counts}")
+    print(f"Combined TB dataset at {combined_dir}: {counts} (each Tuberculosis image x{tb_copies})")
     return combined_dir
+
+def grouped_split(data_dir, output_dir, ratio, seed=42):
+    """
+    Splits like splitfolders.ratio (same per-class sizes: int(ratio * n) for train and val, the
+    rest for test) but keeps an image and all of its __dup copies in the same subset, so no copy
+    of a training image ends up in validation or test.
+    `ratio` is given in splitfolders order: (train, val, test).
+    """
+    import random
+    for class_name in sorted(os.listdir(data_dir)):
+        class_dir = os.path.join(data_dir, class_name)
+        if not os.path.isdir(class_dir):
+            continue
+        groups = {}
+        for fname in sorted(os.listdir(class_dir)):
+            if fname.lower().endswith(IMAGE_EXTS):
+                stem, ext = os.path.splitext(fname)
+                groups.setdefault(stem.split(DUPLICATE_TAG)[0] + ext, []).append(fname)
+        keys = sorted(groups)
+        random.Random(seed).shuffle(keys)
+        n = sum(len(v) for v in groups.values())
+        n_train = int(ratio[0] * n)
+        n_val = int(ratio[1] * n)
+        filled = {"train": 0, "val": 0, "test": 0}
+        for key in keys:
+            subset = "train" if filled["train"] < n_train else ("val" if filled["val"] < n_val else "test")
+            dst_dir = os.path.join(output_dir, subset, class_name)
+            os.makedirs(dst_dir, exist_ok=True)
+            for fname in groups[key]:
+                shutil.copy2(os.path.join(class_dir, fname), os.path.join(dst_dir, fname))
+            filled[subset] += len(groups[key])
+        print(f"Grouped split of {class_name}: {filled}")
+
+def has_duplicates(data_dir):
+    return any(DUPLICATE_TAG in f for _, _, files in os.walk(data_dir) for f in files)
 
 def load_malaria_data(base_dir, data_dir=None, batch_size=32, split=None):
     if data_dir is None:
