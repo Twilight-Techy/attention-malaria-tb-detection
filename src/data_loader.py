@@ -75,7 +75,9 @@ def create_data_generators(data_dir, output_dir, target_size=(224, 224), batch_s
         if has_duplicates(data_dir):
             grouped_split(data_dir, output_dir, ratio=ratio, seed=42)
         else:
-            splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=ratio, group_prefix=None)
+            # Only image files count towards the split sizes (the malaria folders also hold a Thumbs.db)
+            formats = list(IMAGE_EXTS) + [ext.upper() for ext in IMAGE_EXTS]
+            splitfolders.ratio(data_dir, output=output_dir, seed=42, ratio=ratio, group_prefix=None, formats=formats)
     
     train_dir = os.path.join(output_dir, "train")
     val_dir = os.path.join(output_dir, "val")
