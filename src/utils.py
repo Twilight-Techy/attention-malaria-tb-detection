@@ -43,7 +43,11 @@ def plot_training_history_from_csv(csv_path, title="Training History"):
         print(f"Log file {csv_path} not found.")
         return
         
-    df = pd.read_csv(csv_path)
+    try:
+        from results import read_csv_log
+    except ImportError:
+        from .results import read_csv_log
+    df = read_csv_log(csv_path)  # realigns Phase 2 rows, which lack the learning_rate column
     
     plt.figure(figsize=(12, 4))
 

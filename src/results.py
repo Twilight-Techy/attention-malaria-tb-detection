@@ -356,6 +356,31 @@ def plot_pr_curves(df, dataset_name, split, y_pos, pos_preds, output_dir):
         plt.savefig(os.path.join(_split_dir(output_dir, dataset_name, split, 'AUC-PR'), f'pr_curves_{display_name}_{split}.png'))
         plt.close()
 
+def read_csv_log(path):
+    """
+    Reads a CSVLogger file written by both training phases. Phase 1 logs a learning_rate column
+    (from ReduceLROnPlateau) and sets the header; Phase 2 appends rows without that column, so
+    those rows are one field short and must be realigned rather than read positionally.
+    """
+    import csv
+    with open(path, newline='') as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        return pd.DataFrame()
+    header = rows[0]
+    short_header = [c for c in header if c != 'learning_rate']
+    records = []
+    for row in rows[1:]:
+        if not row:
+            continue
+        if len(row) == len(header):
+            records.append(dict(zip(header, row)))
+        elif len(row) == len(short_header):
+            records.append(dict(zip(short_header, row)))
+        else:
+            raise ValueError(f"{path}: row with {len(row)} fields does not match header {header}")
+    return pd.DataFrame(records, columns=header).apply(pd.to_numeric, errors='coerce')
+
 def read_training_history(dataset_name, split, model_name, in_dir='.'):
     """
     Loads the CSVLogger history of one run (phase 1 + fine-tuning), keeping the last entry
@@ -364,7 +389,7 @@ def read_training_history(dataset_name, split, model_name, in_dir='.'):
     path = os.path.join(in_dir, training_log_path(dataset_name, split, MODEL_LAYER_NAMES[model_name]))
     if not os.path.exists(path):
         return None
-    df = pd.read_csv(path)
+    df = read_csv_log(path)
     if df.empty or 'epoch' not in df.columns:
         return None
     df = df.drop_duplicates(subset='epoch', keep='last').sort_values('epoch').reset_index(drop=True)

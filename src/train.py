@@ -8,7 +8,11 @@ def get_best_metric_from_csv(csv_path, metric='val_accuracy', mode='max'):
     if not csv_path or not os.path.exists(csv_path):
         return None
     try:
-        df = pd.read_csv(csv_path)
+        try:
+            from results import read_csv_log
+        except ImportError:
+            from .results import read_csv_log
+        df = read_csv_log(csv_path)  # realigns Phase 2 rows, which lack the learning_rate column
         if metric in df.columns:
             if mode == 'max':
                 return float(df[metric].max())
