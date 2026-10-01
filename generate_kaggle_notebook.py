@@ -67,6 +67,14 @@ for source_dir in source_dirs:
 if not source_dirs:
     print("No previous run state attached; starting fresh.")
 
+# Datasets to retrain from scratch: their restored checkpoints, markers, logs and evaluations are
+# removed so the training loop runs them again (e.g. ['malaria']). Leave empty when resuming.
+RESET_DATASETS = []
+for ds in RESET_DATASETS:
+    display_name = {'malaria': 'Malaria', 'tb': 'Tuberculosis'}[ds]
+    print(f"Resetting all restored {ds} artifacts so it is retrained...")
+    get_ipython().system(f'rm -rf {results_dir}/*_{ds}_* {results_dir}/generated_results/{display_name}')
+
 print("\\nRecovered files in Thesis_Results:")
 get_ipython().system(f'ls -lh {results_dir}')
 
