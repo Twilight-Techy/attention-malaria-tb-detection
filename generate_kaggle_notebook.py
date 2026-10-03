@@ -78,11 +78,18 @@ for ds in RESET_DATASETS:
 print("\\nRecovered files in Thesis_Results:")
 get_ipython().system(f'ls -lh {results_dir}')
 
-# Copy previously trained weights from Thesis_Results into the repo folder for Keras to resume
-get_ipython().system(f'cp -r {results_dir}/* . 2>/dev/null || true')
+# BackupAndRestore folders of fully trained models are never used again; drop them to save disk space
+import shutil
+for marker in glob.glob(os.path.join(results_dir, '*.h5.done')):
+    shutil.rmtree(os.path.join(results_dir, 'backup_phase1_' + os.path.basename(marker)[:-len('.done')]), ignore_errors=True)
 
-# Set up a background process to continuously sync your progress into Thesis_Results
-get_ipython().system_raw(f'while true; do cp *.h5 *.done *.phase1_done *.csv *.png *.npz *.zip {results_dir}/ 2>/dev/null; cp -r backup_* generated_results {results_dir}/ 2>/dev/null; sleep 120; done &')
+# Link previously trained weights from Thesis_Results into the repo folder for Keras to resume.
+# Hard links (cp -l) keep one copy on disk: /kaggle/working is limited to 20 GB, and keeping every
+# checkpoint twice (repo folder + Thesis_Results) fills it up.
+get_ipython().system(f'cp -rlf {results_dir}/* . 2>/dev/null || true')
+
+# Set up a background process to continuously sync your progress into Thesis_Results (also as hard links)
+get_ipython().system_raw(f'while true; do cp -lf *.h5 *.done *.phase1_done *.csv *.png *.npz *.zip {results_dir}/ 2>/dev/null; cp -rlf backup_* generated_results {results_dir}/ 2>/dev/null; sleep 120; done &')
 
 print("Kaggle Workspace initialized! Background sync to /kaggle/working/Thesis_Results is active.")
 """)
@@ -90,6 +97,7 @@ print("Kaggle Workspace initialized! Background sync to /kaggle/working/Thesis_R
 setup_cell = nbf.v4.new_code_cell("""import sys
 import os
 import gc
+import shutil
 import subprocess
 import tensorflow.keras.backend as K
 import pandas as pd
@@ -252,6 +260,9 @@ for dataset_name in datasets_to_run:
             # Mark as completely finished
             with open(completion_marker, 'w') as f:
                 f.write("training and finetuning complete")
+            # Its Phase 1 BackupAndRestore folder is no longer needed (frees disk space)
+            for backup in (f"backup_phase1_{save_path}", os.path.join(results_dir, f"backup_phase1_{save_path}")):
+                shutil.rmtree(backup, ignore_errors=True)
 
         if stopped_early:
             break
@@ -295,7 +306,7 @@ else:
     print("\\n\\nPIPELINE COMPLETE. All experiments successfully finished and data saved.")
 
 # Final sync of this session's progress into Thesis_Results (the background loop only runs every 2 minutes)
-get_ipython().system(f'cp *.h5 *.done *.phase1_done *.csv *.png *.npz *.zip {results_dir}/ 2>/dev/null; cp -r backup_* generated_results {results_dir}/ 2>/dev/null')
+get_ipython().system(f'cp -lf *.h5 *.done *.phase1_done *.csv *.png *.npz *.zip {results_dir}/ 2>/dev/null; cp -rlf backup_* generated_results {results_dir}/ 2>/dev/null')
 """)
 
 production_md = nbf.v4.new_markdown_cell("""## 8. Final Production Deployment Pipeline
